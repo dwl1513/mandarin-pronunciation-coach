@@ -1,0 +1,38 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- env / build ---
+.venv/
+venv/
+build/
+dist/
+
+# --- data caches (large, regenerable) ---
+data/cache/
+data/standard_audio/*.wav
+!data/standard_audio/.gitkeep
+
+# --- model checkpoints ---
+*.bin
+*.pt
+*.safetensors
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- gradio temp files ---
+flagged/
+gradio_cached_examples/
