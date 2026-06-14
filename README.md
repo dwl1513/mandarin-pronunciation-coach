@@ -3,8 +3,7 @@
 [![python](https://img.shields.io/badge/python-3.10-blue.svg)]()
 [![tests](https://img.shields.io/badge/tests-36%20passing-brightgreen.svg)]()
 [![license](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
-
-A coursework project for **语音信息处理 (Speech Information Processing)**: an
+an
 end-to-end Mandarin pronunciation assessment + correction system.  The user
 reads (or speaks freely) a given text into the microphone; the system scores
 their pronunciation along five dimensions and gives **per-character** feedback
@@ -274,16 +273,6 @@ tests, so CI stays fast.
 - Hsu, W. et al. — *Wav2Vec 2.0*
 - Witt S. — *Use of speech recognition in CALL*, 1999 (GOP)
 - SpeechOcean762 dataset (OpenSLR #101) — *used as methodological validation*; note that it is **English L2** data, not Mandarin
-
-## 👥 Credits (team contributions)
-
-| 成员 | 主要贡献 |
-|---|---|
-| 队员 A | M1 audio preprocessing, M3 feature extraction (DSP) |
-| 队员 B | M2 ASR + forced alignment, M4 scoring algorithms (DTW, tone classification), evaluation (PCC) |
-| 队员 C | M5 visualization + TTS integration, Gradio UI, end-to-end pipeline, tests |
-
-> _Replace the names above with the actual team members before submission._
 
 ## 📄 License
 
