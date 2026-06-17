@@ -102,6 +102,42 @@ button:disabled {
   border: 1px solid var(--border);
 }
 
+/* 卡片柔和投影，增强层次感，演示时更有质感 */
+.card-shadow {
+  box-shadow:
+    0 1px 2px oklch(0.17 0 0 / 0.04),
+    0 8px 24px oklch(0.17 0 0 / 0.05);
+}
+
+.card-shadow-lg {
+  box-shadow:
+    0 2px 4px oklch(0.17 0 0 / 0.05),
+    0 18px 48px oklch(0.17 0 0 / 0.08);
+}
+
+/* 自定义滚动条，整页滚动时更克制 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: oklch(0.17 0 0 / 0.18);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.17 0 0 / 0.3);
+  background-clip: content-box;
+}
+
 .fine-grid {
   background-image:
     linear-gradient(oklch(0.17 0 0 / 0.035) 1px, transparent 1px),

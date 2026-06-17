@@ -80,16 +80,51 @@ def _parse_tts_engines(tts_engine: Optional[str]) -> list[tuple[str | None, str 
 
 def _collect_reference(reference_text: str,
                        engine: Optional[str],
-                       voice: Optional[str]) -> ReferenceArtifacts:
+                       voice: Optional[str],
+                       prefer_model_alignment: bool = True,
+                       f0_method: str = "pyin") -> ReferenceArtifacts:
     ref_audio_path = synth_reference(reference_text, engine=engine, voice=voice)
     ref_pre = preprocess(ref_audio_path)
     ref_mfcc = extract_mfcc(ref_pre.wav)
-    ref_f0, ref_times, ref_voiced = extract_f0(ref_pre.raw_wav)
-    ref_alignment = align(ref_pre.raw_wav, reference_text,
-                          vad_segments=ref_pre.vad_segments)
+    ref_f0, ref_times, ref_voiced = extract_f0(ref_pre.raw_wav, method=f0_method)
+    ref_alignment = align(
+        ref_pre.raw_wav,
+        reference_text,
+        vad_segments=ref_pre.vad_segments,
+        prefer_model=prefer_model_alignment,
+    )
     return ReferenceArtifacts(
         engine=engine or "default",
         voice=voice,
+        audio_path=ref_audio_path,
+        pre=ref_pre,
+        mfcc=ref_mfcc,
+        alignment=ref_alignment,
+        f0=ref_f0,
+        f0_times=ref_times,
+        voiced=ref_voiced,
+    )
+
+
+def _collect_reference_from_audio(reference_text: str,
+                                  audio_path: Union[str, Path],
+                                  prefer_model_alignment: bool = True,
+                                  f0_method: str = "pyin",
+                                  ) -> ReferenceArtifacts:
+    """Use an existing standard recording as the reference."""
+    ref_audio_path = Path(audio_path)
+    ref_pre = preprocess(ref_audio_path)
+    ref_mfcc = extract_mfcc(ref_pre.wav)
+    ref_f0, ref_times, ref_voiced = extract_f0(ref_pre.raw_wav, method=f0_method)
+    ref_alignment = align(
+        ref_pre.raw_wav,
+        reference_text,
+        vad_segments=ref_pre.vad_segments,
+        prefer_model=prefer_model_alignment,
+    )
+    return ReferenceArtifacts(
+        engine="provided",
+        voice=None,
         audio_path=ref_audio_path,
         pre=ref_pre,
         mfcc=ref_mfcc,
@@ -104,6 +139,8 @@ def _best_score(scores: list, prefer_per_syllable: bool = True):
     """Pick the highest-overall score object from several reference voices."""
     if not scores:
         return None
+    if len(scores) == 1:
+        return scores[0]
     if prefer_per_syllable and all(getattr(s, "per_syllable", None) for s in scores):
         # 各参考音长度一致时，逐字取最高分，更符合 multi-reference 思路。
         base = max(scores, key=lambda s: float(getattr(s, "overall", 0.0)))
@@ -125,7 +162,11 @@ def assess(user_audio: Union[str, Path, np.ndarray, tuple],
            use_tts_reference: bool = True,
            asr_engine: Optional[str] = None,
            tts_engine: Optional[str] = None,
-           tts_voice: Optional[str] = None) -> AssessmentArtifacts:
+           tts_voice: Optional[str] = None,
+           reference_audio_path: Optional[Union[str, Path]] = None,
+           asr_fallback_to_local: bool = True,
+           prefer_model_alignment: bool = True,
+           f0_method: str = "pyin") -> AssessmentArtifacts:
     """Score a single utterance against a reference text.
 
     Args:
@@ -141,13 +182,27 @@ def assess(user_audio: Union[str, Path, np.ndarray, tuple],
         asr_engine:         optional ASR engine override, e.g. "aliyun-asr".
         tts_engine:         optional TTS engine override, e.g. "aliyun-tts".
         tts_voice:          optional TTS voice override for engines that use it.
+        reference_audio_path:
+                            optional existing standard recording.  When present,
+                            the pipeline uses it directly instead of calling TTS.
+        asr_fallback_to_local:
+                            when cloud ASR fails, decide whether to load local
+                            wav2vec2.  The Web app disables this to avoid long
+                            first-run waits during live demos.
+        prefer_model_alignment:
+                            use wav2vec2 forced alignment when True; when False,
+                            use VAD-based uniform alignment for low-latency demos.
     """
     user_pre = preprocess(user_audio)
     user_mfcc = extract_mfcc(user_pre.wav)
-    user_f0, user_times, user_voiced = extract_f0(user_pre.raw_wav)
+    user_f0, user_times, user_voiced = extract_f0(user_pre.raw_wav, method=f0_method)
 
-    user_alignment = align(user_pre.raw_wav, reference_text,
-                            vad_segments=user_pre.vad_segments)
+    user_alignment = align(
+        user_pre.raw_wav,
+        reference_text,
+        vad_segments=user_pre.vad_segments,
+        prefer_model=prefer_model_alignment,
+    )
 
     # Reference path (TTS + same feature extraction).  Multiple engines can be
     # passed as "mimo-tts,aliyun-tts" for multi-reference scoring.
@@ -157,14 +212,31 @@ def assess(user_audio: Union[str, Path, np.ndarray, tuple],
     ref_f0 = ref_times = ref_voiced = None
     ref_audio_path = None
     if use_tts_reference:
-        for engine, engine_voice in _parse_tts_engines(tts_engine):
+        if reference_audio_path:
             try:
-                references.append(_collect_reference(
-                    reference_text, engine=engine, voice=engine_voice or tts_voice,
-                ))
+                references.append(
+                    _collect_reference_from_audio(
+                        reference_text,
+                        reference_audio_path,
+                        prefer_model_alignment=prefer_model_alignment,
+                        f0_method=f0_method,
+                    )
+                )
             except Exception as e:
-                # Network/TTS failure shouldn't kill the whole pipeline.
-                print(f"[pipeline] TTS reference unavailable ({engine}): {e!r}")
+                print(f"[pipeline] provided reference unavailable: {e!r}")
+        else:
+            for engine, engine_voice in _parse_tts_engines(tts_engine):
+                try:
+                    references.append(_collect_reference(
+                        reference_text,
+                        engine=engine,
+                        voice=engine_voice or tts_voice,
+                        prefer_model_alignment=prefer_model_alignment,
+                        f0_method=f0_method,
+                    ))
+                except Exception as e:
+                    # Network/TTS failure shouldn't kill the whole pipeline.
+                    print(f"[pipeline] TTS reference unavailable ({engine}): {e!r}")
         if references:
             primary_ref = references[0]
             ref_audio_path = primary_ref.audio_path
@@ -178,7 +250,11 @@ def assess(user_audio: Union[str, Path, np.ndarray, tuple],
     recognized_text = ""
     if use_asr:
         try:
-            recognized_text = recognize(user_pre.raw_wav, engine=asr_engine)
+            recognized_text = recognize(
+                user_pre.raw_wav,
+                engine=asr_engine,
+                fallback_to_local=asr_fallback_to_local,
+            )
         except Exception as e:
             print(f"[pipeline] ASR unavailable: {e!r}")
 
@@ -243,7 +319,10 @@ def assess(user_audio: Union[str, Path, np.ndarray, tuple],
             range_score=r_score, pitch_range_semitones=rng,
         )
 
-    dim_scores["completeness"] = score_completeness(recognized_text, reference_text)
+    if use_asr:
+        dim_scores["completeness"] = score_completeness(
+            recognized_text, reference_text,
+        )
     dim_scores["confidence"] = score_confidence(
         dim_scores,
         user_voiced=user_voiced,

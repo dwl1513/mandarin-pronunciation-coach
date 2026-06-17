@@ -39,9 +39,10 @@ def test_pipeline_smoke_runs_end_to_end():
     assert "confidence" in art.report
     assert 0.0 <= art.report["overall"] <= 100.0
     assert 0.0 <= art.report["confidence"]["overall"] <= 100.0
-    # All five dimensions should be populated.
-    for dim in ("accuracy", "tone", "fluency", "prosody", "completeness"):
+    # ASR 关闭时跳过完整度，避免测试触发模型下载或云端调用。
+    for dim in ("accuracy", "tone", "fluency", "prosody"):
         assert dim in art.report["dims"]
+    assert "completeness" not in art.report["dims"]
     # Per-syllable view should match the reference text length.
     assert len(art.report["per_syllable"]) == 4
     chars = [s["char"] for s in art.report["per_syllable"]]

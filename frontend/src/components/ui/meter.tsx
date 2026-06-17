@@ -24,7 +24,7 @@ export function Meter({ value, label, tone = "neutral", className }: MeterProps)
           <span className="mono">{value.toFixed(1)}</span>
         </div>
       ) : null}
-      <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+      <div className="h-2 overflow-hidden rounded-full bg-foreground/10">
         <div
           className={cn("h-full rounded-full transition-all duration-500", toneClass[tone])}
           style={{ width: `${width}%` }}

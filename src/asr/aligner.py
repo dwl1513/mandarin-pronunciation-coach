@@ -56,6 +56,7 @@ class ParsedSyllable:
     tone: int
     lexical_tone: int
     tone_rule: str = ""
+    group: int = 0
 
 
 # ---------------------------------------------------------------- text helpers
@@ -68,24 +69,28 @@ def _parse_reference_detail(text: str) -> List[ParsedSyllable]:
     readings as tone errors, so we apply the high-frequency PSC-relevant rules
     here.
     """
-    keep: List[str] = []
+    keep: List[tuple[str, int]] = []
+    group = 0
     for ch in text:
         if "一" <= ch <= "鿿":         # CJK unified ideographs
-            keep.append(ch)
+            keep.append((ch, group))
+        elif ch in "，。！？、；：,.!?;":
+            group += 1
     if not keep:
         return []
 
     # pypinyin returns e.g. "ni3"; numeric style keeps the tone digit.
-    with_tone = lazy_pinyin(keep, style=Style.TONE3, neutral_tone_with_five=True)
-    plain     = lazy_pinyin(keep, style=Style.NORMAL)
+    chars_only = [ch for ch, _group in keep]
+    with_tone = lazy_pinyin(chars_only, style=Style.TONE3, neutral_tone_with_five=True)
+    plain     = lazy_pinyin(chars_only, style=Style.NORMAL)
 
     out: List[ParsedSyllable] = []
-    for ch, py_tone, py_plain in zip(keep, with_tone, plain):
+    for (ch, syl_group), py_tone, py_plain in zip(keep, with_tone, plain):
         # Extract trailing digit as tone; default to 5 (neutral) if absent.
         tone = 5
         if py_tone and py_tone[-1].isdigit():
             tone = int(py_tone[-1])
-        out.append(ParsedSyllable(ch, py_plain, tone, tone))
+        out.append(ParsedSyllable(ch, py_plain, tone, tone, group=syl_group))
     _apply_tone_sandhi(out)
     return out
 
@@ -115,7 +120,11 @@ def _apply_tone_sandhi(syllables: List[ParsedSyllable]) -> None:
             i += 1
             continue
         j = i
-        while j < n and syllables[j].lexical_tone == 3:
+        while (
+            j < n
+            and syllables[j].lexical_tone == 3
+            and syllables[j].group == syllables[i].group
+        ):
             j += 1
         if j - i >= 2:
             for k in range(i, j - 1):
@@ -123,8 +132,16 @@ def _apply_tone_sandhi(syllables: List[ParsedSyllable]) -> None:
         i = j
 
     for i, syl in enumerate(syllables):
-        next_syl = syllables[i + 1] if i + 1 < n else None
-        prev_syl = syllables[i - 1] if i > 0 else None
+        next_syl = (
+            syllables[i + 1]
+            if i + 1 < n and syllables[i + 1].group == syl.group
+            else None
+        )
+        prev_syl = (
+            syllables[i - 1]
+            if i > 0 and syllables[i - 1].group == syl.group
+            else None
+        )
 
         if syl.char == "不":
             if next_syl and next_syl.lexical_tone == 4:
@@ -159,18 +176,25 @@ def _vad_uniform_align(chars: List,
     if not chars:
         return []
 
+    vad_segments = _clean_vad_segments(vad_segments, total_duration)
     if vad_segments:
-        # Concatenate voiced regions; allot duration proportional to char count.
-        durations = [end - start for start, end in vad_segments]
-        total_voiced = sum(durations)
+        total_voiced = sum(end - start for start, end in vad_segments)
         if total_voiced <= 0:
             vad_segments = [(0.0, total_duration)]
-            durations = [total_duration]
             total_voiced = total_duration
+        elif len(chars) < 80:
+            # 现场短句常有键鼠声、吸气声或很碎的 VAD 片段；短句用首尾包络
+            # 更能保证逐字窗口连续。长篇朗读则保留停顿，避免把静音分给字。
+            start = vad_segments[0][0]
+            end = vad_segments[-1][1]
+            vad_segments = [(start, end)]
+            total_voiced = end - start
     else:
         vad_segments = [(0.0, total_duration)]
-        durations = [total_duration]
         total_voiced = total_duration
+
+    if len(vad_segments) > 1:
+        return _vad_segmented_align(chars, vad_segments, total_voiced)
 
     per_char = total_voiced / len(chars)
     aligned: List[SyllableAlign] = []
@@ -181,12 +205,19 @@ def _vad_uniform_align(chars: List,
         ch, py, tone, lexical_tone, tone_rule = _fields(syl)
         # If current segment runs out, advance to the next voiced block.
         remaining = seg_end - cursor
-        if remaining < per_char * 0.5 and seg_idx + 1 < len(vad_segments):
+        if remaining < per_char * 0.35 and seg_idx + 1 < len(vad_segments):
             seg_idx += 1
             seg_start, seg_end = vad_segments[seg_idx]
             cursor = seg_start
         start = cursor
-        end = min(cursor + per_char, seg_end)
+        end = cursor + per_char
+        if end > seg_end and seg_idx + 1 < len(vad_segments):
+            # 当前 VAD 段剩余太短时，直接转入下一段，避免一个字跨过静音。
+            seg_idx += 1
+            seg_start, seg_end = vad_segments[seg_idx]
+            start = seg_start
+            end = start + per_char
+        end = min(end, seg_end)
         aligned.append(SyllableAlign(
             char=ch, pinyin=py, tone=tone,
             start=float(start), end=float(end), in_vocab=False,
@@ -194,6 +225,86 @@ def _vad_uniform_align(chars: List,
         ))
         cursor = end
     return aligned
+
+
+def _vad_segmented_align(chars: List,
+                         vad_segments: List[Tuple[float, float]],
+                         total_voiced: float) -> List[SyllableAlign]:
+    """按 VAD 有声段时长分配字数，用于长篇朗读 fallback 对齐。"""
+    durations = np.asarray([end - start for start, end in vad_segments], dtype=np.float32)
+    raw_counts = durations / max(total_voiced, 1e-6) * len(chars)
+    counts = np.floor(raw_counts).astype(int)
+    counts[(counts == 0) & (raw_counts >= 0.25)] = 1
+
+    diff = int(len(chars) - counts.sum())
+    fractions = raw_counts - np.floor(raw_counts)
+    if diff > 0:
+        order = np.argsort(-fractions)
+        for idx in order[:diff]:
+            counts[idx] += 1
+    elif diff < 0:
+        order = np.argsort(fractions)
+        for idx in order:
+            if diff == 0:
+                break
+            if counts[idx] > 0:
+                counts[idx] -= 1
+                diff += 1
+
+    aligned: List[SyllableAlign] = []
+    char_idx = 0
+    for (seg_start, seg_end), count in zip(vad_segments, counts):
+        if count <= 0:
+            continue
+        seg_dur = max(seg_end - seg_start, 1e-3)
+        per_char = seg_dur / count
+        for local_idx in range(int(count)):
+            if char_idx >= len(chars):
+                break
+            ch, py, tone, lexical_tone, tone_rule = _fields(chars[char_idx])
+            start = seg_start + local_idx * per_char
+            end = min(seg_start + (local_idx + 1) * per_char, seg_end)
+            aligned.append(SyllableAlign(
+                char=ch, pinyin=py, tone=tone,
+                start=float(start), end=float(end), in_vocab=False,
+                lexical_tone=lexical_tone, tone_rule=tone_rule,
+            ))
+            char_idx += 1
+
+    if char_idx < len(chars):
+        start, end = vad_segments[-1]
+        tail_dur = max((end - start) / max(len(chars) - char_idx, 1), 0.05)
+        cursor = end
+        for syl in chars[char_idx:]:
+            ch, py, tone, lexical_tone, tone_rule = _fields(syl)
+            aligned.append(SyllableAlign(
+                char=ch, pinyin=py, tone=tone,
+                start=float(cursor), end=float(cursor + tail_dur), in_vocab=False,
+                lexical_tone=lexical_tone, tone_rule=tone_rule,
+            ))
+            cursor += tail_dur
+
+    return aligned[:len(chars)]
+
+
+def _clean_vad_segments(vad_segments: List[Tuple[float, float]],
+                        total_duration: float) -> List[Tuple[float, float]]:
+    """Drop tiny isolated VAD blips that often come from click/noise before speech."""
+    cleaned = [
+        (max(0.0, float(start)), min(total_duration, float(end)))
+        for start, end in vad_segments
+        if end > start
+    ]
+    if len(cleaned) <= 1:
+        return cleaned
+
+    long_segments = [
+        (start, end) for start, end in cleaned
+        if end - start >= 0.18
+    ]
+    if long_segments:
+        return long_segments
+    return cleaned
 
 
 # --------------------------------------------------------------- primary path
@@ -363,7 +474,8 @@ def _wav2vec2_align(wav: np.ndarray,
 def align(wav: np.ndarray,
           reference_text: str,
           vad_segments: Optional[List[Tuple[float, float]]] = None,
-          sr: int = SAMPLE_RATE) -> List[SyllableAlign]:
+          sr: int = SAMPLE_RATE,
+          prefer_model: bool = True) -> List[SyllableAlign]:
     """Align audio to reference text → per-character timestamps.
 
     Falls back to a VAD-based uniform partition if the model is unavailable.
@@ -372,9 +484,12 @@ def align(wav: np.ndarray,
     if not chars or wav.size == 0:
         return []
 
+    total_duration = len(wav) / float(sr)
+    if not prefer_model:
+        return _vad_uniform_align(chars, vad_segments or [], total_duration)
+
     result = _wav2vec2_align(wav, chars)
     if result is not None and len(result) == len(chars):
         return result
 
-    total_duration = len(wav) / float(sr)
     return _vad_uniform_align(chars, vad_segments or [], total_duration)

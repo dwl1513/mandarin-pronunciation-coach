@@ -20,6 +20,10 @@ data/cache/
 data/standard_audio/*.wav
 !data/standard_audio/.gitkeep
 
+# --- formal local datasets (large audio, keep metadata/transcripts) ---
+data/psc_human_dataset/**/*.mp3
+data/psc_human_dataset/**/*.wav
+
 # --- model checkpoints ---
 *.bin
 *.pt

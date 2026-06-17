@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Tuple, Union
+import warnings
 
 import numpy as np
 
@@ -95,7 +96,13 @@ def frame_blocking(wav: np.ndarray,
 # ------------------------------------------------------------------------- VAD
 def _vad_webrtc(pcm16: np.ndarray, sr: int) -> List[Tuple[float, float]]:
     """Run webrtcvad over PCM16 audio, return [(start_s, end_s), ...] of voiced regions."""
-    import webrtcvad  # local import: optional dep
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="pkg_resources is deprecated as an API.*",
+            category=UserWarning,
+        )
+        import webrtcvad  # local import: optional dep
 
     vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
     frame_samples = int(sr * VAD_FRAME_MS / 1000)

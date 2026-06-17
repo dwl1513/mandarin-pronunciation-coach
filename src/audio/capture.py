@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Tuple, Union
+import warnings
 
 import librosa
 import numpy as np
@@ -27,9 +28,17 @@ def load_audio(source: Union[PathLike, np.ndarray, Tuple[int, np.ndarray]],
         - bare np.ndarray (already at target sr)
     """
     if isinstance(source, (str, Path)):
-        wav, file_sr = sf.read(str(source), dtype="float32", always_2d=False)
+        try:
+            wav, file_sr = sf.read(str(source), dtype="float32", always_2d=False)
+        except Exception:
+            # 浏览器 MediaRecorder 常输出 webm/mp4，soundfile 可能无法直接读取。
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="PySoundFile failed.*")
+                warnings.filterwarnings("ignore", category=FutureWarning)
+                wav, file_sr = librosa.load(str(source), sr=None, mono=False)
+            wav = wav.astype(np.float32, copy=False)
         if wav.ndim == 2:
-            wav = wav.mean(axis=1)
+            wav = wav.mean(axis=0 if wav.shape[0] <= 2 else 1)
         if file_sr != sr:
             wav = librosa.resample(wav, orig_sr=file_sr, target_sr=sr)
         return wav.astype(np.float32, copy=False)

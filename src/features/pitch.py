@@ -27,16 +27,39 @@ def extract_f0(wav: np.ndarray, sr: int = SAMPLE_RATE,
     if wav.size < FRAME_LENGTH * 2:
         wav = np.pad(wav, (0, FRAME_LENGTH * 2 - wav.size))
 
-    if method != "pyin":
+    frame_length = FRAME_LENGTH * 2    # pYIN/YIN needs >=2 periods of fmin
+    if method == "pyin":
+        f0, voiced, _vp = librosa.pyin(
+            wav,
+            fmin=F0_MIN_HZ, fmax=F0_MAX_HZ,
+            sr=sr,
+            frame_length=frame_length,
+            hop_length=HOP_LENGTH,
+        )
+    elif method == "yin":
+        # YIN 比 pYIN 快很多，适合长篇真人范读批量回归测试。它没有直接
+        # 给出 voiced mask，所以用帧能量做一个保守的有声门控。
+        f0 = librosa.yin(
+            wav,
+            fmin=F0_MIN_HZ, fmax=F0_MAX_HZ,
+            sr=sr,
+            frame_length=frame_length,
+            hop_length=HOP_LENGTH,
+        )
+        rms = librosa.feature.rms(
+            y=wav,
+            frame_length=frame_length,
+            hop_length=HOP_LENGTH,
+        )[0]
+        n = min(len(f0), len(rms))
+        f0 = f0[:n]
+        rms = rms[:n]
+        energy_floor = max(float(np.percentile(rms, 35)) * 0.8,
+                           float(np.max(rms)) * 0.01,
+                           1e-5)
+        voiced = (rms > energy_floor) & np.isfinite(f0)
+    else:
         raise ValueError(f"Unsupported F0 method: {method!r}")
-
-    f0, voiced, _vp = librosa.pyin(
-        wav,
-        fmin=F0_MIN_HZ, fmax=F0_MAX_HZ,
-        sr=sr,
-        frame_length=FRAME_LENGTH * 2,    # pYIN needs >=2 periods of fmin
-        hop_length=HOP_LENGTH,
-    )
     f0 = np.nan_to_num(f0, nan=0.0).astype(np.float32)
     voiced = voiced.astype(bool)
     times = librosa.times_like(f0, sr=sr, hop_length=HOP_LENGTH).astype(np.float32)

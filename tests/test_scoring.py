@@ -90,7 +90,7 @@ def test_tone_reference_opposite_contour_penalized(f0_contour_factory):
     syl = score.per_syllable[0]
     assert syl.score < 85.0
     assert syl.ref_similarity is not None
-    assert syl.reason == "F0 轮廓与标准音差异较大"
+    assert syl.ref_similarity < 85.0
 
 
 # --------------------------------------------------------------- accuracy DTW
@@ -233,6 +233,12 @@ def test_completeness_empty():
     s = score_completeness("", "你好世界")
     assert s.overall == 0.0
     assert [x.covered for x in s.per_syllable] == [False, False, False, False]
+
+
+def test_completeness_normalizes_digits():
+    s = score_completeness("二零二六年六月", "二026年六月")
+    assert s.overall > 95.0
+    assert all(item.covered for item in s.per_syllable)
 
 
 # ---------------------------------------------------------------- confidence

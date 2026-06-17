@@ -25,8 +25,29 @@ class CompletenessScore:
     per_syllable: list[SyllableCompleteness] = field(default_factory=list)
 
 
-def _chinese_only(s: str) -> str:
-    return "".join(ch for ch in s if "一" <= ch <= "鿿")
+_DIGIT_TRANSLATION = str.maketrans({
+    "0": "零",
+    "1": "一",
+    "2": "二",
+    "3": "三",
+    "4": "四",
+    "5": "五",
+    "6": "六",
+    "7": "七",
+    "8": "八",
+    "9": "九",
+    "〇": "零",
+    "○": "零",
+    "Ｏ": "零",
+    "O": "零",
+    "o": "零",
+})
+
+
+def _normalized_chars(s: str) -> str:
+    """保留中文并统一数字写法，避免“二000/二零零零”被误判为漏读。"""
+    normalized = s.translate(_DIGIT_TRANSLATION)
+    return "".join(ch for ch in normalized if "一" <= ch <= "鿿")
 
 
 def _lcs_covered(ref: str, hyp: str) -> list[SyllableCompleteness]:
@@ -56,8 +77,8 @@ def _lcs_covered(ref: str, hyp: str) -> list[SyllableCompleteness]:
 
 
 def score_completeness(recognized: str, reference: str) -> CompletenessScore:
-    ref = _chinese_only(reference)
-    hyp = _chinese_only(recognized)
+    ref = _normalized_chars(reference)
+    hyp = _normalized_chars(recognized)
     if not ref:
         return CompletenessScore(0.0, 1.0, 0.0)
     if not hyp:

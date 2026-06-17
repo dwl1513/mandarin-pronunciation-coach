@@ -14,8 +14,6 @@ from dataclasses import dataclass
 import librosa
 import numpy as np
 
-from src.features.pitch import normalize_contour
-
 
 @dataclass
 class ProsodyScore:
@@ -55,14 +53,16 @@ def score_prosody(user_f0: np.ndarray, user_voiced: np.ndarray,
     D, _wp = librosa.sequence.dtw(X=u_z.reshape(1, -1), Y=r_z.reshape(1, -1),
                                    metric="euclidean")
     avg_cost = float(D[-1, -1]) / max(u_z.size + r_z.size, 1)
-    # avg_cost ~0 => identical; ~3 => unrelated.
-    similarity = float(np.clip(100.0 * (1.0 - avg_cost / 2.0), 0.0, 100.0))
+    # avg_cost ~0 => identical.  Connected speech between real users and TTS
+    # naturally differs, so the reference curve is a guide rather than a hard
+    # template.
+    similarity = float(np.clip(100.0 * (1.0 - avg_cost / 3.0), 0.0, 100.0))
 
     # Pitch range: native expressive speech ~8-14 ST. <4 ST is flat reading.
     pitch_range = float(np.percentile(u_st, 95) - np.percentile(u_st, 5))
     range_score = float(np.clip(100.0 * pitch_range / 10.0, 0.0, 100.0))
 
-    overall = 0.7 * similarity + 0.3 * range_score
+    overall = 0.55 * similarity + 0.45 * range_score
     return ProsodyScore(
         overall=float(overall),
         contour_similarity=similarity,

@@ -53,6 +53,29 @@ def _pause_score(pause_total: float, pause_count: int,
                  total_duration: float, n_syllables: int) -> tuple[float, float]:
     """短句允许少量自然停顿；长停顿和高停顿占比才明显扣分。"""
     pause_ratio = pause_total / max(total_duration, 1e-3)
+    if n_syllables >= 80:
+        # PSC 朗读篇目约 400~600 字，正式范读会按语义分层停顿。这里按停顿
+        # 占比和“每十字停顿次数”评分，避免把正常断句当作卡顿。
+        ratio_target = 0.18
+        ratio_limit = 0.38
+        if pause_ratio <= ratio_target:
+            ratio_score = 100.0
+        else:
+            ratio_score = float(np.clip(
+                100.0 * (1.0 - (pause_ratio - ratio_target)
+                         / (ratio_limit - ratio_target) * 0.45),
+                55.0, 100.0,
+            ))
+
+        pauses_per_10 = pause_count / max(n_syllables / 10.0, 1e-3)
+        if pauses_per_10 <= 0.95:
+            count_score = 100.0
+        else:
+            count_score = float(np.clip(
+                100.0 - 18.0 * (pauses_per_10 - 0.95), 70.0, 100.0,
+            ))
+        return pause_ratio, 0.72 * ratio_score + 0.28 * count_score
+
     # 短句里一个 0.3~0.5s 的停顿常常是 TTS/示范朗读的自然断句。
     free_pause = min(0.45, 0.06 * max(n_syllables, 1))
     adjusted_pause = max(0.0, pause_total - free_pause)

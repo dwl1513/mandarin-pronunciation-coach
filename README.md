@@ -103,6 +103,25 @@ The first time you press "开始评测" the system will:
 Subsequent runs are fast and fully offline if the selected reference audio is
 already cached.
 
+### 3b. Launch the FastAPI + React app
+
+新版展示应用使用 FastAPI 作为真实后端，React 只负责录音、提交和展示结果。
+
+后端：
+
+```bash
+uv run uvicorn src.server.main:app --reload --port 8000
+```
+
+前端：
+
+```bash
+cd frontend
+pnpm dev
+```
+
+浏览器打开 `http://localhost:5173/` 后，可以选择例句、播放标准发音、录音朗读、提交评测，并查看总分、逐字诊断、F0 对比、频谱图、波形和建议。
+
 ### 4. CLI smoke check (optional)
 
 ```bash
