@@ -46,3 +46,17 @@ class AssessmentResponse(BaseModel):
     evidence: EvidenceLinks
     markdown: str
 
+
+class AssessmentJobStatus(BaseModel):
+    id: str
+    status: Literal["queued", "running", "done", "failed"]
+    stage: str
+    message: str
+    progress: int = Field(ge=0, le=100)
+    error: str | None = None
+    result: AssessmentResponse | None = None
+
+
+class AssessmentJobCreated(BaseModel):
+    id: str
+    status_url: str

@@ -1,392 +1,479 @@
-# 🗣️ Mandarin Pronunciation Coach · 普通话 AI 发音教练
+# 普通话发音评测系统
 
-[![python](https://img.shields.io/badge/python-3.10-blue.svg)]()
-[![tests](https://img.shields.io/badge/tests-56%20passing-brightgreen.svg)]()
-[![license](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
-A Mandarin pronunciation assessment + correction system.  The user
-reads (or speaks freely) a given text into the microphone; the system scores
-their pronunciation along five dimensions and gives **per-character** feedback
-plus a TTS-generated standard reference.
+本项目是语音处理课程大作业。系统面向普通话水平测试练习场景，用户选择正式朗读片段或输入自定义文本，录音朗读后，系统给出五维评分、逐字诊断、ASR 识别结果、F0 对比图、频谱图、波形图和改进建议。
 
-## ✨ Features
+当前展示应用采用：
 
-- **5-dim scoring** aligned with the official 普通话水平测试 (PSC) rubric
-  - 声韵母准确度 (DTW on MFCC vs. TTS reference)
-  - **声调** — utterance-level F0 baseline + feature classifier + reference-driven F0 contour matching (project differentiator)
-  - 流利度 (语速 / 停顿 / 停顿占比)
-  - 韵律自然度 (sentence-level F0 contour DTW + pitch range)
-  - 完整度 (CER against ASR transcription)
-- **Per-character diagnosis** with tone-error highlighting plus initial/final
-  sub-syllable accuracy scores
-- **Standard pronunciation playback** via Microsoft edge-tts, Aliyun Qwen-TTS,
-  Xiaomi MiMo-V2.5-TTS, or optional F5-TTS
-- **Cloud ASR option** via Aliyun Qwen-ASR for more stable completeness scoring
-- **Multi-reference scoring** with MiMo + Qwen reference voices to reduce single-TTS style bias
-- **Confidence estimation** for score reliability based on ASR coverage, F0
-  availability, voiced coverage, speech duration, and reference availability
-- **Live waveform / spectrogram / F0 contour visualizations**
-- **Gradio web UI** for plug-and-play demo
-- Hand-rolled DSP modules (pre-emphasis, framing, MFCC, F0, VAD) — satisfies the "必须有算法实现" course requirement
+- 后端：FastAPI
+- 前端：React + Vite + Tailwind
+- Python 环境：uv
+- 前端包管理：pnpm
+- 固定例句：普通话水平测试 PSC 朗读作品片段
+- 固定例句标准音：真人范读截取片段
+- 自定义文本标准音：MiMo / Qwen / Edge TTS
+- ASR：Qwen-ASR 或本地 wav2vec2
 
-## 🏗️ Architecture
+## 快速启动
 
-```
-                Reference text ──► pypinyin ──► (char, pinyin, tone)
-                                                       │
-   Mic / file ──► M1 preprocess ──► M3 features ───────┤
-                       │                  │            │
-                       └─► VAD ───────────┤            │
-                                          │            ▼
-                                  M2 wav2vec2 forced alignment
-                                          │            │
-                                          ▼            ▼
-                       ┌────────────────────────────────────────┐
-                       │   M4 scoring (accuracy / tone /        │
-                       │       fluency / prosody / completeness)│
-                       └────────────────────────────────────────┘
-                                          │
-                                          ▼
-                  M4.5 aggregate ──► M5 report + visualize + TTS示范
-```
+### 1. 准备 Python 环境
 
-| Module | Responsibility | "From-scratch" vs "uses pretrained" |
-|---|---|---|
-| `src/audio/preprocess.py` | Pre-emphasis, framing, windowing, VAD | **From scratch (DSP)** |
-| `src/features/spectral.py` | MFCC / FBank / energy / ZCR | Wraps librosa primitives |
-| `src/features/pitch.py` | F0 via pYIN, semitone normalization | Wraps librosa.pyin |
-| `src/asr/recognizer.py` | ASR for completeness | Pretrained wav2vec2-CTC / Aliyun Qwen-ASR |
-| `src/asr/aligner.py` | Forced alignment + VAD fallback | torchaudio.functional.forced_align |
-| `src/scoring/accuracy.py` | Per-syllable + initial/final DTW MFCC matching | **From scratch (algorithm)** |
-| `src/scoring/tone.py` | F0 feature-based tone classifier + sandhi handling | **From scratch (algorithm)** |
-| `src/scoring/fluency.py` | Speech rate / pause statistics | **From scratch (algorithm)** |
-| `src/scoring/prosody.py` | Contour DTW + pitch range | **From scratch (algorithm)** |
-| `src/scoring/completeness.py` | Character-level CER | jiwer |
-| `src/feedback/tts.py` | Reference synthesis | edge-tts / Aliyun Qwen-TTS / MiMo-V2.5-TTS / F5-TTS |
-| `src/app/gradio_app.py` | Web UI | Gradio |
-
-## 🚀 Quick start
-
-### 1. Environment
-
-This project uses `uv` for dependency and virtualenv management.  The
-project Python version is pinned to 3.10 by `.python-version`.
+项目使用 `uv` 管理 Python 依赖和虚拟环境。
 
 ```bash
 uv venv --python 3.10
 uv sync
 ```
 
-`requirements.txt` is kept for reference, but `pyproject.toml` and `uv.lock`
-are the canonical project environment files.
-
-### 2. Run the unit tests (≈3.5 min, no network / no model download)
+如果需要使用阿里云 Qwen-ASR / Qwen-TTS：
 
 ```bash
-uv run python -m pytest -q
+uv sync --extra aliyun
 ```
 
-You should see `56 passed`.
-
-### 3. Launch the Gradio app
+如果需要使用小米 MiMo-TTS：
 
 ```bash
-uv run python -m src.app.gradio_app
+uv sync --extra mimo
 ```
 
-The first time you press "开始评测" the system will:
+也可以一次性安装：
 
-1. download the wav2vec2 Chinese ASR/alignment checkpoint (~1.2 GB) — cached
-   under `data/cache/hf/`;
-2. ping the selected TTS engine to synthesize the reference audio — cached under
-   `data/standard_audio/`.
+```bash
+uv sync --extra aliyun --extra mimo
+```
 
-Subsequent runs are fast and fully offline if the selected reference audio is
-already cached.
+### 2. 配置环境变量
 
-### 3b. Launch the FastAPI + React app
+复制示例配置：
 
-新版展示应用使用 FastAPI 作为真实后端，React 只负责录音、提交和展示结果。
+```bash
+cp .env.example .env
+```
 
-后端：
+然后在 `.env` 里填入自己的 Key。`.env` 已经被 Git 忽略，不能提交到仓库。
+
+常用配置如下：
+
+```env
+DASHSCOPE_API_KEY=你的阿里云 DashScope Key
+ALIYUN_ASR_MODEL=qwen3-asr-flash
+ALIYUN_TTS_MODEL=qwen3-tts-flash
+ALIYUN_TTS_VOICE=Cherry
+ALIYUN_TTS_LANGUAGE_TYPE=Chinese
+
+MIMO_API_KEY=你的 MiMo Key
+MIMO_TTS_MODEL=mimo-v2.5-tts
+MIMO_TTS_VOICE=白桦
+MIMO_TTS_BASE_URL=https://api.xiaomimimo.com/v1
+```
+
+固定 PSC 例句会优先使用本地真人标准音，不需要现场调用 TTS。自定义文本才需要 TTS 生成标准音。
+
+### 3. 启动后端
+
+在项目根目录运行：
 
 ```bash
 uv run uvicorn src.server.main:app --reload --port 8000
 ```
 
-前端：
+后端启动后，可以访问：
+
+```text
+http://127.0.0.1:8000/api/health
+```
+
+返回 `ok: true` 就说明后端正常。
+
+### 4. 启动前端
+
+打开另一个终端：
 
 ```bash
 cd frontend
+pnpm install
 pnpm dev
 ```
 
-浏览器打开 `http://localhost:5173/` 后，可以选择例句、播放标准发音、录音朗读、提交评测，并查看总分、逐字诊断、F0 对比、频谱图、波形和建议。
+浏览器访问：
 
-### 4. CLI smoke check (optional)
-
-```bash
-uv run python scripts/smoke_check.py
+```text
+http://localhost:5173/
 ```
 
-To use Aliyun Qwen-TTS as the reference voice:
+前端默认请求：
 
-```bash
-uv sync --extra aliyun
-export DASHSCOPE_API_KEY=your_key
-export TTS_ENGINE=aliyun-tts
-uv run python scripts/smoke_check.py --tts-engine aliyun-tts --tts-voice Neil
+```text
+http://127.0.0.1:8000
 ```
 
-To use Xiaomi MiMo-V2.5-TTS as the reference voice:
+如果后端地址需要修改，可以在前端环境变量中设置：
 
 ```bash
-uv sync --extra mimo
-export MIMO_API_KEY=your_key
-export TTS_ENGINE=mimo-tts
-uv run python scripts/smoke_check.py --tts-engine mimo-tts,aliyun-tts --asr-engine aliyun-asr
+VITE_API_BASE=http://127.0.0.1:8000 pnpm dev
 ```
 
-This runs TTS → preprocess → align → all 5 scorers against a built-in
-sentence and prints the result.  Use it to verify the live model + network
-path on a new machine.
+## 展示应用怎么用
 
-To generate an error-simulation benchmark table for reports / slides:
+1. 启动 FastAPI 后端。
+2. 启动 React 前端。
+3. 打开 `http://localhost:5173/`。
+4. 在左侧选择一个 PSC 例句，或输入自定义文本。
+5. 点击“播放标准音”，可以听真人标准范读。
+6. 点击“开始录音”，按文本朗读。
+7. 录音结束后点击“提交评测”。
+8. 右侧会显示评测结果。
+
+结果包括：
+
+- 综合得分
+- 五维分数
+- 改进建议
+- 参考文本和 ASR 识别文本对比
+- 逐字诊断
+- 用户录音和标准音回放
+- 用户 F0 与标准 F0 对比图
+- 用户录音频谱图
+- 用户录音波形和 VAD
+- 可信度证据
+
+## 当前固定例句
+
+前端固定例句已经替换为 12 条 PSC 正式朗读片段。
+
+例句配置文件：
+
+```text
+frontend/src/data/practice-examples.json
+```
+
+当前 12 条例句：
+
+```text
+psc-01-beijing-spring      北京的春节
+psc-02-spring              春
+psc-03-hurry               匆匆
+psc-06-nature-language     大自然的语言
+psc-08-dinghu-spring       鼎湖山听泉
+psc-11-qiantang-tide       观潮
+psc-13-summer-seaside      海滨仲夏夜
+psc-18-jinci               晋祠
+psc-23-mogao               莫高窟
+psc-30-hakka-house         世界民居奇葩
+psc-41-summer-palace       颐和园
+psc-45-taiwan              中国的宝岛台湾
+```
+
+这些例句的标准音是从真人普通话范读中人工标注时间戳后截取出来的。前端使用的标准音文件在：
+
+```text
+frontend/public/audio/examples/psc-*.wav
+```
+
+人工标注时间戳保存在：
+
+```text
+data/psc_human_dataset/example_clips.json
+```
+
+片段定义保存在：
+
+```text
+data/psc_human_dataset/example_clip_specs.json
+```
+
+如果修改了时间戳或例句定义，重新生成前端例句和标准音：
+
+```bash
+uv run python scripts/generate_psc_example_assets.py
+```
+
+## 标准音和 F0 对比
+
+固定 PSC 例句的标准音已经是本地真人截取音频。
+
+当用户选择固定例句并提交评测时，后端会根据 `example_id` 找到对应标准音：
+
+```text
+frontend/public/audio/examples/psc-*.wav
+```
+
+然后 pipeline 会从该真人标准音中提取：
+
+- 参考 MFCC
+- 参考 F0
+- 参考 F0 时间轴
+- 参考对齐结果
+
+所以前端 F0 图里的参考 F0，就是当前固定例句对应真人标准音的 F0。
+
+自定义文本没有本地真人标准音，系统会调用 TTS 生成标准音，再提取参考 F0。
+
+## 后端接口
+
+主要接口如下：
+
+```text
+GET  /api/health
+GET  /api/examples
+GET  /api/examples/{example_id}/audio
+POST /api/assess
+GET  /api/assess-jobs/{assessment_id}
+GET  /api/results/{assessment_id}/{file_name}
+```
+
+评测接口是任务式设计。
+
+提交录音：
+
+```text
+POST /api/assess
+```
+
+后端会立即返回任务 ID：
+
+```json
+{
+  "id": "assessment_id",
+  "status_url": "/api/assess-jobs/assessment_id"
+}
+```
+
+前端轮询：
+
+```text
+GET /api/assess-jobs/{assessment_id}
+```
+
+任务状态包括：
+
+```text
+queued
+running
+done
+failed
+```
+
+完成后，`result` 字段里会包含完整评测结果。
+
+每次评测生成的声学证据保存在：
+
+```text
+data/cache/web_results/{assessment_id}/
+```
+
+典型文件：
+
+```text
+user.wav
+reference.wav
+waveform.png
+spectrogram.png
+f0.png
+```
+
+## PSC 片段标注工具
+
+如果需要重新人工截取标准音，可以启动后端后访问：
+
+```text
+http://127.0.0.1:8000/tools/clipper
+```
+
+这个工具可以：
+
+- 听完整真人原音
+- 看波形
+- 设置开始时间
+- 设置结束时间
+- 预听截取片段
+- 保存时间戳
+
+保存后会更新：
+
+```text
+data/psc_human_dataset/example_clips.json
+```
+
+然后重新导出：
+
+```bash
+uv run python scripts/generate_psc_example_assets.py
+```
+
+## 算法流程
+
+系统评测一条录音时，大致流程如下：
+
+```text
+用户录音
+  -> 音频预处理
+  -> VAD 有声段检测
+  -> ASR 识别
+  -> 文本完整度评分
+  -> 声韵母 MFCC-DTW 评分
+  -> F0 提取
+  -> 声调评分
+  -> 韵律评分
+  -> 流利度评分
+  -> 五维加权汇总
+  -> 逐字诊断和建议
+  -> 生成波形、频谱、F0 对比图
+```
+
+五维分数：
+
+| 维度 | 含义 |
+|---|---|
+| 声韵母 | 基于 MFCC-DTW，比对用户录音和标准音的局部声学相似度 |
+| 声调 | 基于 F0 曲线、声调轮廓、升降趋势和参考音 F0 |
+| 流利度 | 基于语速、停顿、停顿占比和节奏稳定性 |
+| 韵律 | 基于整句 F0 走势和音域范围 |
+| 完整度 | 基于 ASR 文本和参考文本的字符级覆盖情况 |
+
+## 真人数据集和实验数据
+
+正式真人普通话数据集在：
+
+```text
+data/psc_human_dataset/
+```
+
+重要文件：
+
+```text
+data/psc_human_dataset/manifest.json
+data/psc_human_dataset/transcripts/summary.json
+data/psc_human_dataset/transcripts/asr_quality_report.md
+data/psc_human_dataset/transcripts/asr_quality_report.csv
+data/psc_human_dataset/benchmarks/human_reference_benchmark.md
+data/psc_human_dataset/benchmarks/human_reference_benchmark.csv
+data/psc_human_dataset/benchmarks/human_reference_benchmark.json
+```
+
+本地真人完整音频目录：
+
+```text
+data/psc_human_dataset/audio/
+```
+
+完整音频体积较大，没有提交到 Git。前端用到的 12 条短标准音已经单独截取并保存在：
+
+```text
+frontend/public/audio/examples/
+```
+
+## 常用脚本
+
+生成前端 PSC 例句和真人标准音：
+
+```bash
+uv run python scripts/generate_psc_example_assets.py
+```
+
+采集 PSC 真人数据集：
+
+```bash
+uv run python scripts/collect_psc_reference_audio.py
+```
+
+批量转写 PSC 真人数据：
+
+```bash
+uv run python scripts/transcribe_psc_human_dataset.py --engine aliyun-asr
+```
+
+审计 ASR 转写质量：
+
+```bash
+uv run python scripts/audit_psc_asr_transcripts.py
+```
+
+真人标准音交叉评测：
+
+```bash
+uv run python scripts/benchmark_human_reference.py --limit 50 --workers 4
+```
+
+受控错误模拟实验：
 
 ```bash
 uv run python scripts/benchmark_pronunciation.py --tts-engine mimo-tts,aliyun-tts --asr-engine aliyun-asr
 ```
 
-The script writes `data/cache/benchmarks/pronunciation_benchmark.md` and `.csv`.
-It creates clean, dropped-tail, dropped-middle, muted-middle, long-pause, slow,
-global/local pitch-shifted, and noisy variants, then shows which score
-dimensions react to each mistake.
+## 测试和检查
 
-## 📁 Repository layout
+运行测试：
 
+```bash
+uv run python -m pytest -q
 ```
+
+检查后端和脚本：
+
+```bash
+uv run ruff check src/server/main.py src/server/schemas.py src/server/clipper.py scripts/generate_psc_example_assets.py
+```
+
+检查前端构建：
+
+```bash
+cd frontend
+pnpm build
+```
+
+## 项目结构
+
+```text
 mandarin-pronunciation-coach/
 ├── README.md
 ├── pyproject.toml
 ├── uv.lock
-├── requirements.txt                  # legacy reference
-├── pytest.ini
-├── config.py                         # all knobs in one place
+├── config.py
+├── 实验报告.md
 ├── data/
-│   ├── reference_texts/              # your own reading material (txt)
-│   ├── standard_audio/               # cached TTS reference WAVs
-│   └── cache/                        # HF model cache
-├── docs/
-│   └── DESIGN.md                     # the original design write-up
+│   ├── psc_human_dataset/
+│   │   ├── manifest.json
+│   │   ├── example_clip_specs.json
+│   │   ├── example_clips.json
+│   │   ├── transcripts/
+│   │   └── benchmarks/
+│   └── cache/
+├── frontend/
+│   ├── public/audio/examples/
+│   └── src/
+│       ├── App.tsx
+│       └── data/practice-examples.json
 ├── scripts/
-│   └── smoke_check.py                # live pipeline sanity check
+│   ├── generate_psc_example_assets.py
+│   ├── collect_psc_reference_audio.py
+│   ├── transcribe_psc_human_dataset.py
+│   ├── audit_psc_asr_transcripts.py
+│   └── benchmark_human_reference.py
 ├── src/
+│   ├── server/
+│   │   ├── main.py
+│   │   ├── schemas.py
+│   │   ├── examples.py
+│   │   ├── render.py
+│   │   └── clipper.py
 │   ├── audio/
-│   │   ├── capture.py                # load / save audio
-│   │   └── preprocess.py             # M1 — pre-emphasis, framing, VAD
 │   ├── asr/
-│   │   ├── models.py                 # lazy wav2vec2 holder
-│   │   ├── recognizer.py             # M2 — CTC greedy ASR
-│   │   └── aligner.py                # M2 — forced alignment + fallback
 │   ├── features/
-│   │   ├── spectral.py               # M3 — MFCC / FBank / energy / ZCR
-│   │   └── pitch.py                  # M3 — F0 (pYIN) + helpers
 │   ├── scoring/
-│   │   ├── accuracy.py               # M4.1 — per-syllable + initial/final DTW on MFCC
-│   │   ├── tone.py                   # M4.2 — Chao templates
-│   │   ├── fluency.py                # M4.3 — VAD-based stats
-│   │   ├── prosody.py                # M4.4 — contour DTW
-│   │   ├── completeness.py           #        — CER
-│   │   └── aggregator.py             # M4.5 — weighted overall
 │   ├── feedback/
-│   │   ├── tts.py                    # M5 — edge-tts / Aliyun / MiMo / F5-TTS
-│   │   ├── visualize.py              # M5 — matplotlib figures
-│   │   └── report.py                 # M5 — markdown / dict report
-│   ├── app/
-│   │   └── gradio_app.py             # web UI
-│   └── pipeline.py                   # end-to-end orchestrator
-└── tests/                            # 56 unit + integration tests
-    ├── conftest.py
-    ├── test_audio_preprocess.py
-    ├── test_features.py
-    ├── test_scoring.py
-    ├── test_aligner_fallback.py
-    └── test_pipeline_integration.py
+│   └── pipeline.py
+└── tests/
 ```
 
-## 🧮 Algorithm highlights
+## 说明
 
-### Pre-emphasis + framing
+- `.env` 包含密钥，不能提交。
+- `data/cache/` 是运行缓存，不能提交。
+- `data/psc_human_dataset/audio/` 是完整真人音频，体积较大，默认不提交。
+- `frontend/public/audio/examples/psc-*.wav` 是前端展示用的短标准音，可以提交。
+- 固定 PSC 例句使用真人标准音；自定义文本使用 TTS 标准音。
 
-`y[n] = x[n] - 0.97·x[n-1]`, then 25 ms frames with 10 ms hop and a Hamming
-window.  Implemented from scratch in `src/audio/preprocess.py`.
+## 许可证
 
-### MFCC
-
-Standard 13 static + Δ + ΔΔ = 39-dim features.  Used as the substrate for
-the per-syllable accuracy DTW.
-
-### Tone scoring (project differentiator)
-
-The tone module now uses a reference-driven scoring path when a standard TTS
-recording is available, and falls back to an interpretable feature classifier
-when it is not.  The reference side can come from edge-tts, Aliyun Qwen-TTS,
-or Xiaomi MiMo-V2.5-TTS.  We keep the iteration history because it is the
-most useful story to explain in a course presentation.
-
-**v1 — Chao five-scale template matching** *(turned out to fail on connected speech)*
-
-Per-syllable: cut voiced F0 → z-score normalize → resample to 20 pts →
-L2-distance to four Chao templates (55 / 35 / 214 / 51) → `argmin`.
-
-Why it failed: per-syllable z-scoring kills absolute pitch position, so
-**tone 1 (high level)** and **tone 3 (low level)** collapse to the same
-"flat zero-mean" contour.  On real TTS / continuous speech every tone-1
-syllable was misclassified, dragging the score below 25.
-
-**v2 — Feature-based classifier with utterance baseline**
-
-For each syllable we extract four interpretable F0 features:
-
-| Feature | Computed as | What it captures |
-|---|---|---|
-| **Relative position** | `(median_st − utterance_median_st) / IQR` | High vs. low in the speaker's range — separates tone 1 from tone 3 |
-| **Slope** | Linear `polyfit(t, F0_st)` coefficient | Rising (tone 2) vs falling (tone 4) |
-| **Curvature** | Quadratic `polyfit` coefficient `a` | Positive `a` ⇒ U-shape ⇒ tone 3 dipping |
-| **Range** | 90th − 10th percentile (semitones) | Distinguishes confident contours from noisy near-flat ones |
-
-F0 is median-filtered first to remove pYIN octave glitches.  The decision
-tree is ordered tone 3 → 4 → 2 → 1 → 5 to give the most distinctive shape
-the first claim on each syllable.  Common confusable pairs
-(1↔2, 2↔3, 1↔4, 3↔5) get 45 / 100 partial credit instead of a binary
-correct / wrong flip — this prevents one borderline call from collapsing
-the whole syllable's score.
-
-On the smoke-check TTS sentence "今天天气真好。" v2 took the tone score from
-**24.5 → 69.9** without changing any other module.
-
-**v3 — Reference-driven F0 contour scoring** *(current when TTS reference exists)*
-
-For each aligned character we also cut the corresponding F0 segment from the
-standard TTS reference, such as MiMo-V2.5-TTS, Aliyun Qwen-TTS, or edge-tts.
-Both curves are converted to semitones and centered by their own utterance-level pitch
-baseline.  Then we compute three interpretable sub-scores:
-
-| Sub-score | Method | Purpose |
-|---|---|---|
-| **Contour score** | DTW distance between normalized F0 contours | Captures the actual tone melody |
-| **Slope score** | Difference between start-to-end F0 movement | Separates rising / falling behaviour |
-| **Coverage score** | Whether both sides have enough voiced F0 frames | Penalizes unreliable windows |
-
-The final tone score is a weighted fusion of these three scores.  The
-standalone classifier is still shown as a diagnostic label, but the numeric
-score is mainly driven by user-vs-reference F0 similarity.
-
-When multiple reference voices are configured, for example `mimo-tts,aliyun-tts`,
-the pipeline evaluates each reference independently and keeps the better
-per-character match for accuracy and tone.  This reduces false penalties caused
-by one TTS voice's speaking style or sentence intonation.
-
-With Aliyun Qwen-TTS as both the "user" audio and reference audio for
-"今天天气真好。", v3 raises the tone dimension from **58.97 → 98.96**.  This is
-the expected behaviour: identical high-quality reference speech should not be
-penalized just because a rule-based classifier calls a connected-speech tone
-borderline.
-
-### DTW accuracy
-
-We synthesize a TTS reference for the *same text*, extract MFCC, slice both
-the user and reference recordings by the per-syllable alignment, and compute
-cosine-distance DTW (via `librosa.sequence.dtw`).  Mean-per-step cost is
-squashed into a 0..100 score.
-
-The current version also estimates a pinyin-based initial/final boundary for
-each character.  It runs the same MFCC-DTW comparison on the initial segment
-and final segment separately, so the report can say whether a low character
-accuracy score is closer to a 声母偏差 or 韵母偏差.
-
-Accuracy also fuses an articulation cue: the user's voiced-frame coverage and
-local duration are compared with the reference window.  This catches local
-silence, swallowed syllables, and very short alignment windows that MFCC-DTW
-alone can sometimes score too generously.
-
-### Completeness localization
-
-Completeness still uses character-level CER for the whole utterance.  In
-addition, the scorer aligns the recognized text and reference text with a
-longest-common-subsequence pass, then marks each reference character as 已读
-or 漏读.  The per-character report can therefore show exactly which character
-is suspected to be missing.
-
-### Confidence estimation
-
-The system estimates score reliability separately from the score itself.  It
-combines five evidence signals: valid speech duration, TTS reference
-availability, ASR coverage, F0 availability, and per-character articulation
-coverage.  The final report shows an overall confidence score plus per-character
-高 / 中 / 低 confidence labels.  This is useful when the recording is too short,
-too noisy, missing ASR output, or lacks a standard reference voice.
-
-### Fluency scoring
-
-Fluency now uses a PSC-style reading model instead of a narrow speed target.
-The scoring gives full credit to a natural reading-rate band, allows a small
-amount of short-sentence demonstration pause, and adds a rhythm-stability score
-from per-character duration variance.  This prevents formal standard readings
-from being unfairly penalized while still catching long silences and choppy
-reading.
-
-### Error-simulation benchmark
-
-`scripts/benchmark_pronunciation.py` creates controlled variants of a standard
-reading.  In the default run, deleting the tail or middle lowers completeness,
-muting a local segment hurts local accuracy, inserting a long pause lowers
-fluency, global/local pitch-shifting lowers tone, and noise lowers tone /
-prosody.  This gives a compact experiment table for explaining that the five
-score dimensions respond to different pronunciation problems.
-
-### Forced alignment
-
-Primary path: `torchaudio.functional.forced_align` driven by log-probs from
-`jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn`.  Frame rate ≈ 50 Hz
-(20 ms per frame).  We collapse consecutive same-token runs in the alignment
-path to recover (start_frame, end_frame) for each reference character.
-
-Fallback path: if the model fails to load or too many characters are OOV, we
-distribute characters uniformly across all VAD-voiced regions.  Coarse, but
-keeps tone/fluency scoring usable.
-
-## 🧪 Testing strategy
-
-| Layer | Test file | What it covers |
-|---|---|---|
-| DSP | `test_audio_preprocess.py` | Pre-emphasis high-freq boost, frame shape, VAD voiced vs silent |
-| Features | `test_features.py` | MFCC shape, energy ordering, pYIN recovers known 220 Hz pitch |
-| Scoring | `test_scoring.py` | Tone classification on synthetic flat / rising / dipping / falling contours, accuracy DTW, initial/final sub-syllable scores, fluency stats, aggregator |
-| Alignment | `test_aligner_fallback.py` | VAD-fallback aligner produces monotone timestamps |
-| Pipeline | `test_pipeline_integration.py` | End-to-end smoke (no model load) |
-
-The full suite runs in ~3.5 min on CPU.  The wav2vec2 model is **only**
-loaded by the live `scripts/smoke_check.py` and the Gradio app, never by the
-tests, so CI stays fast.
-
-## ⚖️ Known limitations
-
-| Limitation | Why | Workaround |
-|---|---|---|
-| Neutral tone (轻声) detection is heuristic | F0-only signal is too short / context-dependent | We give benefit-of-the-doubt when the contour is low + short |
-| Complex tone sandhi is still heuristic | Common rules like 三声连读 and 一/不 变调 are handled, but phrase-level sandhi is broader | The report shows both dictionary tone and scoring tone |
-| Erhua (儿化) treated as separate char | The current aligner works at character level | Mark as future work |
-| `jonatasgrosman` model has ~3.5k char vocab | Some rare characters are OOV | Aligner skips OOV chars and interpolates timestamps |
-| TTS reference is not a "PSC examiner" voice | edge-tts, Aliyun Qwen-TTS, and MiMo-V2.5-TTS are neural voices | Use multiple reference voices for robustness checks |
-
-## 📚 References
-
-- 普通话水平测试 (PSC) 测试大纲
-- Chao Y.R. — *A System of Tone Letters*, 1930
-- Hsu, W. et al. — *Wav2Vec 2.0*
-- Witt S. — *Use of speech recognition in CALL*, 1999 (GOP)
-- SpeechOcean762 dataset (OpenSLR #101) — *used as methodological validation*; note that it is **English L2** data, not Mandarin
-
-## 📄 License
-
-MIT.  See `LICENSE`.
+MIT

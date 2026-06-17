@@ -76,6 +76,21 @@ type AssessmentResponse = {
   markdown: string
 }
 
+type AssessmentJobCreated = {
+  id: string
+  status_url: string
+}
+
+type AssessmentJobStatus = {
+  id: string
+  status: "queued" | "running" | "done" | "failed"
+  stage: string
+  message: string
+  progress: number
+  error?: string | null
+  result?: AssessmentResponse | null
+}
+
 type SyllableRow = {
   char: string
   pinyin?: string
@@ -132,6 +147,7 @@ function App() {
   const [ttsEngine, setTtsEngine] = useState("mimo-tts,aliyun-tts")
   const [result, setResult] = useState<AssessmentResponse | null>(null)
   const [isAssessing, setIsAssessing] = useState(false)
+  const [assessmentJob, setAssessmentJob] = useState<AssessmentJobStatus | null>(null)
   const [error, setError] = useState("")
 
   const selectedExample = useMemo(
@@ -190,6 +206,7 @@ function App() {
     setSelectedExampleId(example.id)
     setText(example.text)
     setResult(null)
+    setAssessmentJob(null)
     setError("")
     setIsExampleDrawerOpen(false)
   }
@@ -198,6 +215,7 @@ function App() {
     setText(value)
     setSelectedExampleId("custom")
     setResult(null)
+    setAssessmentJob(null)
   }
 
   async function submitAssessment() {
@@ -218,6 +236,8 @@ function App() {
     formData.append("tts_engine", ttsEngine)
 
     setIsAssessing(true)
+    setAssessmentJob(null)
+    setResult(null)
     setError("")
     try {
       const response = await fetch(api("/api/assess"), {
@@ -228,12 +248,36 @@ function App() {
       if (!response.ok) {
         throw new Error(payload?.detail || "评测失败")
       }
-      setResult(payload as AssessmentResponse)
+      const created = payload as AssessmentJobCreated
+      const finalStatus = await pollAssessmentJob(created.status_url)
+      if (!finalStatus.result) {
+        throw new Error("评测完成，但后端没有返回结果")
+      }
+      setResult(finalStatus.result)
     } catch (err) {
       setResult(null)
       setError(err instanceof Error ? err.message : "评测失败，请重试")
     } finally {
       setIsAssessing(false)
+    }
+  }
+
+  async function pollAssessmentJob(statusUrl: string): Promise<AssessmentJobStatus> {
+    while (true) {
+      await delay(900)
+      const response = await fetch(api(statusUrl))
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload?.detail || "无法获取评测进度")
+      }
+      const status = payload as AssessmentJobStatus
+      setAssessmentJob(status)
+      if (status.status === "done") {
+        return status
+      }
+      if (status.status === "failed") {
+        throw new Error(status.error || status.message || "评测失败")
+      }
     }
   }
 
@@ -267,6 +311,7 @@ function App() {
             {/* 右侧主区：总分 → 建议/识别 → 逐字诊断 → 声学证据 → 可信度，整页铺开 */}
             <div className="min-w-0">
               <ResultPanel
+                assessmentJob={assessmentJob}
                 isAssessing={isAssessing}
                 recorder={recorder}
                 result={result}
@@ -571,12 +616,14 @@ function PracticePanel({
 }
 
 function ResultPanel({
+  assessmentJob,
   isAssessing,
   recorder,
   result,
   selectedExample,
   text,
 }: {
+  assessmentJob: AssessmentJobStatus | null
   isAssessing: boolean
   recorder: RecorderController
   result: AssessmentResponse | null
@@ -584,7 +631,7 @@ function ResultPanel({
   text: string
 }) {
   if (isAssessing) {
-    return <AssessingPanel />
+    return <AssessingPanel job={assessmentJob} />
   }
 
   if (!result) {
@@ -1214,40 +1261,89 @@ function pickMimeType() {
   return candidates.find((item) => MediaRecorder.isTypeSupported(item)) ?? ""
 }
 
-function AssessingPanel() {
-  const steps = ["上传录音", "ASR 识别", "TTS 标准音", "F0 与 MFCC", "生成报告"]
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function AssessingPanel({ job }: { job: AssessmentJobStatus | null }) {
+  const steps = [
+    ["upload", "上传录音"],
+    ["queued", "等待任务"],
+    ["asr_tts", "ASR 与标准音"],
+    ["render", "生成声学证据"],
+    ["done", "生成报告"],
+  ] as const
+  const activeStage = job?.stage ?? "upload"
+  const activeIndex = Math.max(
+    0,
+    steps.findIndex(([stage]) => stage === activeStage),
+  )
+
   return (
     <div className="flex flex-col gap-5">
       <Card>
         <CardHeader className="space-y-4">
           <SectionTitle icon={Activity} title="正在评测" />
           <div className="rounded-panel border border-border bg-background p-5">
-            <p className="text-xl font-semibold">后端正在运行完整算法链路。</p>
-            <p className="mt-2 text-sm leading-6 text-muted-strong">
-              这一步会调用 ASR、标准音合成、F0 提取、MFCC-DTW、五维评分和报告生成。
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xl font-semibold">
+                  {job?.message || "录音已提交，正在创建评测任务。"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-muted-strong">
+                  后端会依次完成 ASR、标准音、F0 提取、MFCC-DTW、五维评分和声学证据生成。
+                </p>
+              </div>
+              <span className="mono rounded-full border border-border bg-panel px-3 py-1 text-sm font-semibold">
+                {Math.round(job?.progress ?? 5)}%
+              </span>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-panel-raised">
+              <div
+                className="h-full rounded-full bg-foreground transition-all duration-500"
+                style={{ width: `${Math.max(5, Math.min(100, job?.progress ?? 5))}%` }}
+              />
+            </div>
+            {job?.error ? (
+              <InlineMessage className="mt-4" tone="bad" text={job.error} />
+            ) : null}
+            {job?.id ? (
+              <p className="mono mt-3 text-xs text-muted">任务 ID：{job.id}</p>
+            ) : null}
           </div>
         </CardHeader>
       </Card>
       <Card>
         <CardHeader className="space-y-3">
-          {steps.map((step, index) => (
+          {steps.map(([stage, label], index) => {
+            const isDone = index < activeIndex || job?.status === "done"
+            const isActive = index === activeIndex && job?.status !== "done"
+            return (
             <div
-              className="flex items-center justify-between rounded-panel border border-border bg-background px-4 py-3"
-              key={step}
+              className={cn(
+                "flex items-center justify-between rounded-panel border px-4 py-3 transition-colors",
+                isActive
+                  ? "border-foreground bg-panel-raised"
+                  : "border-border bg-background",
+              )}
+              key={stage}
             >
-              <span className="text-sm font-medium">{step}</span>
-              <span className="flex items-center gap-2 text-xs text-muted-strong">
-                <Activity
-                  className={cn(
-                    "size-4",
-                    index === 1 && "animate-pulse text-foreground",
-                  )}
-                />
-                处理中
+              <span className="text-sm font-medium">{label}</span>
+              <span
+                className={cn(
+                  "flex items-center gap-2 text-xs",
+                  isDone ? "text-good" : isActive ? "text-foreground" : "text-muted-strong",
+                )}
+              >
+                {isDone ? (
+                  <Check className="size-4" />
+                ) : (
+                  <Activity className={cn("size-4", isActive && "animate-pulse")} />
+                )}
+                {isDone ? "完成" : isActive ? "处理中" : "等待"}
               </span>
             </div>
-          ))}
+          )})}
         </CardHeader>
       </Card>
     </div>
@@ -1384,9 +1480,11 @@ function SectionTitle({
 }
 
 function InlineMessage({
+  className,
   text,
   tone,
 }: {
+  className?: string
   text: string
   tone: "bad" | "warn"
 }) {
@@ -1397,6 +1495,7 @@ function InlineMessage({
         tone === "bad"
           ? "border-bad/35 bg-bad/10 text-bad"
           : "border-warn/35 bg-warn/10 text-warn",
+        className,
       )}
     >
       {text}

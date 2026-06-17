@@ -1,0 +1,62 @@
+[
+  {
+    "id": "psc-01-beijing-spring",
+    "start": 0.5,
+    "end": 8.4
+  },
+  {
+    "id": "psc-02-spring",
+    "start": 1.0,
+    "end": 15.0
+  },
+  {
+    "id": "psc-03-hurry",
+    "start": 0.6,
+    "end": 12.2
+  },
+  {
+    "id": "psc-06-nature-language",
+    "start": 0.8,
+    "end": 13.5
+  },
+  {
+    "id": "psc-08-dinghu-spring",
+    "start": 0.2,
+    "end": 16.7
+  },
+  {
+    "id": "psc-11-qiantang-tide",
+    "start": 1.0,
+    "end": 13.4
+  },
+  {
+    "id": "psc-13-summer-seaside",
+    "start": 1.0,
+    "end": 20.2
+  },
+  {
+    "id": "psc-18-jinci",
+    "start": 1.0,
+    "end": 19.6
+  },
+  {
+    "id": "psc-23-mogao",
+    "start": 1.2,
+    "end": 16.2
+  },
+  {
+    "id": "psc-30-hakka-house",
+    "start": 0.2,
+    "end": 15.8
+  },
+  {
+    "id": "psc-41-summer-palace",
+    "start": 0.5,
+    "end": 12.3
+  },
+  {
+    "id": "psc-45-taiwan",
+    "start": 0.6,
+    "end": 16.0
+  }
+]

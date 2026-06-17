@@ -1,0 +1,110 @@
+[
+  {
+    "number": 1,
+    "id": "psc-01-beijing-spring",
+    "title": "北京的春节",
+    "level": "基础",
+    "focus": "正式朗读、自然停顿、句尾完整度",
+    "sentences": 1,
+    "tags": ["PSC", "叙述文", "停顿"]
+  },
+  {
+    "number": 2,
+    "id": "psc-02-spring",
+    "title": "春",
+    "level": "基础",
+    "focus": "景物描写、轻重音、韵律起伏",
+    "sentences": 2,
+    "tags": ["PSC", "景物描写", "韵律"]
+  },
+  {
+    "number": 3,
+    "id": "psc-03-hurry",
+    "title": "匆匆",
+    "level": "基础",
+    "focus": "长短句衔接、语气自然度",
+    "sentences": 1,
+    "tags": ["PSC", "抒情文", "连贯"]
+  },
+  {
+    "number": 6,
+    "id": "psc-06-nature-language",
+    "title": "大自然的语言",
+    "level": "基础",
+    "focus": "说明文语体、声母韵母清晰度",
+    "sentences": 2,
+    "tags": ["PSC", "说明文", "清晰度"]
+  },
+  {
+    "number": 8,
+    "id": "psc-08-dinghu-spring",
+    "title": "鼎湖山听泉",
+    "level": "进阶",
+    "focus": "地名朗读、停连和句中重音",
+    "sentences": 2,
+    "tags": ["PSC", "地名", "停连"]
+  },
+  {
+    "number": 11,
+    "id": "psc-11-qiantang-tide",
+    "title": "观潮",
+    "level": "进阶",
+    "focus": "正式语调、数字和时间表达",
+    "sentences": 2,
+    "tags": ["PSC", "数字", "正式朗读"]
+  },
+  {
+    "number": 13,
+    "id": "psc-13-summer-seaside",
+    "title": "海滨仲夏夜",
+    "level": "进阶",
+    "focus": "韵律、气息和长句完整度",
+    "sentences": 2,
+    "tags": ["PSC", "韵律", "气息"]
+  },
+  {
+    "number": 18,
+    "id": "psc-18-jinci",
+    "title": "晋祠",
+    "level": "进阶",
+    "focus": "排比结构、停顿和声调稳定性",
+    "sentences": 2,
+    "tags": ["PSC", "排比", "声调"]
+  },
+  {
+    "number": 23,
+    "id": "psc-23-mogao",
+    "title": "莫高窟",
+    "level": "挑战",
+    "focus": "说明文朗读、长句语速控制",
+    "sentences": 2,
+    "tags": ["PSC", "说明文", "语速"]
+  },
+  {
+    "number": 30,
+    "id": "psc-30-hakka-house",
+    "title": "世界民居奇葩",
+    "level": "挑战",
+    "focus": "长句气息、专名和正式语调",
+    "sentences": 1,
+    "tags": ["PSC", "长句", "正式语调"]
+  },
+  {
+    "number": 41,
+    "id": "psc-41-summer-palace",
+    "title": "颐和园",
+    "level": "基础",
+    "focus": "地名、轻重音和自然停顿",
+    "sentences": 2,
+    "tags": ["PSC", "地名", "自然停顿"]
+  },
+  {
+    "number": 45,
+    "id": "psc-45-taiwan",
+    "title": "中国的宝岛台湾",
+    "level": "挑战",
+    "focus": "正式说明文、长句完整度和韵律",
+    "sentences": 1,
+    "tags": ["PSC", "说明文", "完整度"]
+  }
+]

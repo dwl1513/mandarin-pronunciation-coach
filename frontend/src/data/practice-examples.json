@@ -1,134 +1,182 @@
 [
   {
-    "id": "daily-park",
-    "title": "日常朗读",
+    "id": "psc-01-beijing-spring",
+    "title": "北京的春节 · PSC 片段",
     "level": "基础",
-    "focus": "连读、轻声、句尾完整度",
-    "scene": "日常口语",
-    "duration": "00:03",
-    "text": "今天天气真好，我们一起去公园散步吧。",
-    "tags": ["轻声", "连读", "完整度"],
-    "audioPath": "/audio/examples/daily-park.wav"
+    "focus": "正式朗读、自然停顿、句尾完整度",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:08",
+    "text": "照北京的老规矩，春节差不多在腊月的初旬就开始了。",
+    "tags": [
+      "PSC",
+      "叙述文",
+      "停顿"
+    ],
+    "audioPath": "/audio/examples/psc-01-beijing-spring.wav"
   },
   {
-    "id": "four-tones",
-    "title": "四声对比",
+    "id": "psc-02-spring",
+    "title": "春 · PSC 片段",
     "level": "基础",
-    "focus": "一声、二声、三声、四声区分",
-    "scene": "声调专项",
-    "duration": "00:04",
-    "text": "妈妈骑马，马慢妈妈骂马。",
-    "tags": ["四声", "声调", "短句"],
-    "audioPath": "/audio/examples/four-tones.wav"
+    "focus": "景物描写、轻重音、韵律起伏",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:14",
+    "text": "盼望着，盼望着，东风来了，春天的脚步近了。一切都像刚睡醒的样子，欣欣然张开了眼。",
+    "tags": [
+      "PSC",
+      "景物描写",
+      "韵律"
+    ],
+    "audioPath": "/audio/examples/psc-02-spring.wav"
   },
   {
-    "id": "mandarin-standard",
-    "title": "标准普通话",
+    "id": "psc-03-hurry",
+    "title": "匆匆 · PSC 片段",
     "level": "基础",
-    "focus": "声韵母准确度、普通话常用词",
-    "scene": "课程演示",
-    "duration": "00:05",
-    "text": "老师让我们认真练习普通话声调。",
-    "tags": ["普通话", "声调", "声韵母"],
-    "audioPath": "/audio/examples/mandarin-standard.wav"
+    "focus": "长短句衔接、语气自然度",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:12",
+    "text": "燕子去了，有再来的时候；杨柳枯了，有再青的时候；桃花谢了，有再开的时候。",
+    "tags": [
+      "PSC",
+      "抒情文",
+      "连贯"
+    ],
+    "audioPath": "/audio/examples/psc-03-hurry.wav"
   },
   {
-    "id": "zh-ch-sh",
-    "title": "平翘舌",
+    "id": "psc-06-nature-language",
+    "title": "大自然的语言 · PSC 片段",
+    "level": "基础",
+    "focus": "说明文语体、声母韵母清晰度",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:13",
+    "text": "立春过后，大地渐渐从沉睡中苏醒过来。冰雪融化，草木萌发，各种花次第开放。",
+    "tags": [
+      "PSC",
+      "说明文",
+      "清晰度"
+    ],
+    "audioPath": "/audio/examples/psc-06-nature-language.wav"
+  },
+  {
+    "id": "psc-08-dinghu-spring",
+    "title": "鼎湖山听泉 · PSC 片段",
     "level": "进阶",
-    "focus": "翘舌音和平舌音对比",
-    "scene": "易错音专项",
-    "duration": "00:04",
-    "text": "请清楚地区分翘舌音和平舌音。",
-    "tags": ["zh/ch/sh", "z/c/s", "清晰度"],
-    "audioPath": "/audio/examples/zh-ch-sh.wav"
+    "focus": "地名朗读、停连和句中重音",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:16",
+    "text": "从肇庆市驱车半小时左右，便到了东郊风景名胜鼎湖山。下了几天的小雨刚停，满山笼罩着轻纱似的薄雾。",
+    "tags": [
+      "PSC",
+      "地名",
+      "停连"
+    ],
+    "audioPath": "/audio/examples/psc-08-dinghu-spring.wav"
   },
   {
-    "id": "nasal",
-    "title": "前后鼻音",
+    "id": "psc-11-qiantang-tide",
+    "title": "观潮 · PSC 片段",
     "level": "进阶",
-    "focus": "an、ang、en、eng 的收尾",
-    "scene": "易错韵母",
-    "duration": "00:05",
-    "text": "我想买一斤新鲜苹果和两瓶牛奶。",
-    "tags": ["前鼻音", "后鼻音", "韵母"],
-    "audioPath": "/audio/examples/nasal.wav"
+    "focus": "正式语调、数字和时间表达",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:12",
+    "text": "钱塘江大潮，自古以来被称为天下奇观。农历八月十八是一年一度的观潮日。",
+    "tags": [
+      "PSC",
+      "数字",
+      "正式朗读"
+    ],
+    "audioPath": "/audio/examples/psc-11-qiantang-tide.wav"
   },
   {
-    "id": "meeting",
-    "title": "会议通知",
-    "level": "基础",
-    "focus": "数字、时间、停顿位置",
-    "scene": "校园通知",
-    "duration": "00:04",
-    "text": "今天下午三点，我们在图书馆开会。",
-    "tags": ["数字", "停顿", "校园"],
-    "audioPath": "/audio/examples/meeting.wav"
-  },
-  {
-    "id": "water-cup",
-    "title": "指令短句",
-    "level": "基础",
-    "focus": "爆破音、舌面音、句中停顿",
-    "scene": "口语指令",
-    "duration": "00:04",
-    "text": "请把这杯温水放在桌子右边。",
-    "tags": ["指令", "停顿", "清晰度"],
-    "audioPath": "/audio/examples/water-cup.wav"
-  },
-  {
-    "id": "beijing",
-    "title": "北京欢迎你",
-    "level": "基础",
-    "focus": "地名、人称、自然重音",
-    "scene": "日常表达",
-    "duration": "00:04",
-    "text": "北京欢迎你，我们一起看升旗。",
-    "tags": ["地名", "重音", "连读"],
-    "audioPath": "/audio/examples/beijing.wav"
-  },
-  {
-    "id": "spring",
-    "title": "春天描写",
+    "id": "psc-13-summer-seaside",
+    "title": "海滨仲夏夜 · PSC 片段",
     "level": "进阶",
-    "focus": "韵律、语速、轻重音",
-    "scene": "朗读材料",
-    "duration": "00:05",
-    "text": "春天到了，花园里的小树慢慢发芽。",
-    "tags": ["韵律", "语速", "朗读"],
-    "audioPath": "/audio/examples/spring.wav"
+    "focus": "韵律、气息和长句完整度",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:19",
+    "text": "夕阳落山不久，西方的天空，还燃烧着一片橘红色的晚霞。大海，也被这霞光染成了红色，而且比天空的景色更要壮观。",
+    "tags": [
+      "PSC",
+      "韵律",
+      "气息"
+    ],
+    "audioPath": "/audio/examples/psc-13-summer-seaside.wav"
   },
   {
-    "id": "taxi",
-    "title": "校园出行",
+    "id": "psc-18-jinci",
+    "title": "晋祠 · PSC 片段",
     "level": "进阶",
-    "focus": "长句完整度、停顿和语速",
-    "scene": "生活场景",
-    "duration": "00:06",
-    "text": "出租车司机已经在学校门口等你十分钟。",
-    "tags": ["长句", "完整度", "流利度"],
-    "audioPath": "/audio/examples/taxi.wav"
+    "focus": "排比结构、停顿和声调稳定性",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:19",
+    "text": "晋祠之美，在山，在树，在水。这里的山，巍巍的，有如一道屏障；长长的，又如伸开的两臂，将晋祠拥在怀中。",
+    "tags": [
+      "PSC",
+      "排比",
+      "声调"
+    ],
+    "audioPath": "/audio/examples/psc-18-jinci.wav"
   },
   {
-    "id": "poem",
-    "title": "古诗朗读",
+    "id": "psc-23-mogao",
+    "title": "莫高窟 · PSC 片段",
     "level": "挑战",
-    "focus": "抑扬顿挫、韵律和节奏",
-    "scene": "朗读材料",
-    "duration": "00:05",
-    "text": "这首古诗读起来抑扬顿挫，很有韵味。",
-    "tags": ["韵律", "节奏", "朗读"],
-    "audioPath": "/audio/examples/poem.wav"
+    "focus": "说明文朗读、长句语速控制",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:15",
+    "text": "在浩瀚无垠的沙漠里，有一片美丽的绿洲，绿洲里藏着一颗闪光的珍珠。这颗珍珠就是敦煌莫高窟。",
+    "tags": [
+      "PSC",
+      "说明文",
+      "语速"
+    ],
+    "audioPath": "/audio/examples/psc-23-mogao.wav"
   },
   {
-    "id": "peace",
-    "title": "新闻语体",
+    "id": "psc-30-hakka-house",
+    "title": "世界民居奇葩 · PSC 片段",
     "level": "挑战",
-    "focus": "长句气息、重音和正式语调",
-    "scene": "正式朗读",
-    "duration": "00:06",
-    "text": "中国人民热爱和平，也热爱美好的生活。",
-    "tags": ["正式", "气息", "语调"],
-    "audioPath": "/audio/examples/peace.wav"
+    "focus": "长句气息、专名和正式语调",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:16",
+    "text": "在闽西南和粤东北的崇山峻岭中，点缀着数以千计的圆形围屋或土楼，这就是被誉为“世界民居奇葩”的客家民居。",
+    "tags": [
+      "PSC",
+      "长句",
+      "正式语调"
+    ],
+    "audioPath": "/audio/examples/psc-30-hakka-house.wav"
+  },
+  {
+    "id": "psc-41-summer-palace",
+    "title": "颐和园 · PSC 片段",
+    "level": "基础",
+    "focus": "地名、轻重音和自然停顿",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:12",
+    "text": "北京的颐和园是个美丽的大公园。进了颐和园的大门，绕过大殿，就来到有名的长廊。",
+    "tags": [
+      "PSC",
+      "地名",
+      "自然停顿"
+    ],
+    "audioPath": "/audio/examples/psc-41-summer-palace.wav"
+  },
+  {
+    "id": "psc-45-taiwan",
+    "title": "中国的宝岛台湾 · PSC 片段",
+    "level": "挑战",
+    "focus": "正式说明文、长句完整度和韵律",
+    "scene": "普通话水平测试朗读",
+    "duration": "00:15",
+    "text": "中国的第一大岛、台湾省的主岛台湾，位于中国大陆架的东南方，地处东海和南海之间，隔着台湾海峡和大陆相望。",
+    "tags": [
+      "PSC",
+      "说明文",
+      "完整度"
+    ],
+    "audioPath": "/audio/examples/psc-45-taiwan.wav"
   }
 ]

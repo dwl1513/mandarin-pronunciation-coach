@@ -1,37 +1,43 @@
 """普通话发音教练 FastAPI 后端。"""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.concurrency import run_in_threadpool
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from config import ALIYUN_ASR_MODEL, CACHE_DIR, MIMO_TTS_MODEL
 from src.pipeline import assess
+from src.server.clipper import router as clipper_router
 from src.server.examples import example_audio_path, load_examples
 from src.server.render import save_assessment_assets
-from src.server.schemas import AssessmentResponse, ExampleItem
+from src.server.schemas import (
+    AssessmentJobCreated,
+    AssessmentJobStatus,
+    AssessmentResponse,
+    ExampleItem,
+)
 
 
 RESULT_ROOT = CACHE_DIR / "web_results"
 RESULT_ROOT.mkdir(parents=True, exist_ok=True)
+JOBS: dict[str, dict[str, Any]] = {}
+EXECUTOR = ThreadPoolExecutor(max_workers=2)
 
 app = FastAPI(title="Mandarin Pronunciation Coach API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(clipper_router)
 
 
 @app.get("/api/health")
@@ -58,15 +64,16 @@ def get_example_audio(example_id: str) -> FileResponse:
     return FileResponse(path, media_type="audio/wav")
 
 
-@app.post("/api/assess", response_model=AssessmentResponse)
+@app.post("/api/assess", response_model=AssessmentJobCreated)
 async def assess_audio(
+    background_tasks: BackgroundTasks,
     audio: UploadFile = File(...),
     reference_text: str = Form(...),
     example_id: str | None = Form(default=None),
     asr_engine: str = Form(default="aliyun-asr"),
     tts_engine: str = Form(default="mimo-tts,aliyun-tts"),
     tts_voice: str | None = Form(default=None),
-) -> AssessmentResponse:
+) -> AssessmentJobCreated:
     text = reference_text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="参考文本不能为空")
@@ -82,8 +89,76 @@ async def assess_audio(
         raise HTTPException(status_code=400, detail="录音文件为空")
     upload_path.write_bytes(content)
 
+    _set_job(
+        assessment_id,
+        status="queued",
+        stage="upload",
+        message="录音已上传，等待评测任务启动",
+        progress=5,
+    )
+    background_tasks.add_task(
+        _submit_assessment_job,
+        assessment_id,
+        upload_path,
+        text,
+        example_id,
+        asr_engine,
+        tts_engine,
+        tts_voice,
+    )
+    return AssessmentJobCreated(
+        id=assessment_id,
+        status_url=f"/api/assess-jobs/{assessment_id}",
+    )
+
+
+@app.get("/api/assess-jobs/{assessment_id}", response_model=AssessmentJobStatus)
+def get_assessment_job(assessment_id: str) -> dict[str, Any]:
+    job = JOBS.get(assessment_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="评测任务不存在")
+    return job
+
+
+def _submit_assessment_job(
+    assessment_id: str,
+    upload_path: Path,
+    text: str,
+    example_id: str | None,
+    asr_engine: str,
+    tts_engine: str,
+    tts_voice: str | None,
+) -> None:
+    EXECUTOR.submit(
+        _run_assessment_job,
+        assessment_id,
+        upload_path,
+        text,
+        example_id,
+        asr_engine,
+        tts_engine,
+        tts_voice,
+    )
+
+
+def _run_assessment_job(
+    assessment_id: str,
+    upload_path: Path,
+    text: str,
+    example_id: str | None,
+    asr_engine: str,
+    tts_engine: str,
+    tts_voice: str | None,
+) -> None:
     reference_audio_path = example_audio_path(example_id) if example_id else None
     try:
+        _set_job(
+            assessment_id,
+            status="running",
+            stage="asr_tts",
+            message="正在调用 ASR、标准音和声学评分链路",
+            progress=20,
+        )
         print(
             "[server] 开始评测 "
             f"id={assessment_id} example={example_id or '-'} "
@@ -91,8 +166,7 @@ async def assess_audio(
             f"asr={asr_engine or '-'} tts={tts_engine or '-'}",
             flush=True,
         )
-        artifacts = await run_in_threadpool(
-            assess,
+        artifacts = assess(
             upload_path,
             text,
             use_asr=True,
@@ -104,15 +178,53 @@ async def assess_audio(
             asr_fallback_to_local=False,
             prefer_model_alignment=False,
         )
+        _set_job(
+            assessment_id,
+            status="running",
+            stage="render",
+            message="评分完成，正在生成波形、频谱和 F0 图",
+            progress=80,
+        )
         print(f"[server] 评测完成 id={assessment_id}，开始生成声学证据", flush=True)
+        result_dir = RESULT_ROOT / assessment_id
         asset_names = save_assessment_assets(artifacts, result_dir)
         print(f"[server] 声学证据生成完成 id={assessment_id}", flush=True)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"评测失败：{exc}",
-        ) from exc
+        _set_job(
+            assessment_id,
+            status="failed",
+            stage="failed",
+            message="评测失败",
+            progress=100,
+            error=str(exc),
+        )
+        print(f"[server] 评测失败 id={assessment_id}: {exc}", flush=True)
+        return
 
+    response = _build_assessment_response(
+        assessment_id=assessment_id,
+        text=text,
+        example_id=example_id,
+        artifacts=artifacts,
+        asset_names=asset_names,
+    )
+    _set_job(
+        assessment_id,
+        status="done",
+        stage="done",
+        message="评测完成",
+        progress=100,
+        result=response,
+    )
+
+
+def _build_assessment_response(
+    assessment_id: str,
+    text: str,
+    example_id: str | None,
+    artifacts: Any,
+    asset_names: dict[str, str | None],
+) -> AssessmentResponse:
     report = _json_ready(artifacts.report)
     evidence = {
         "user_audio_url": _result_url(assessment_id, asset_names["user_audio"]),
@@ -140,6 +252,20 @@ async def assess_audio(
         evidence=evidence,
         markdown=str(report.get("markdown", "")),
     )
+
+
+def _set_job(assessment_id: str, **updates: Any) -> None:
+    current = JOBS.get(assessment_id, {
+        "id": assessment_id,
+        "status": "queued",
+        "stage": "upload",
+        "message": "等待处理",
+        "progress": 0,
+        "error": None,
+        "result": None,
+    })
+    current.update(updates)
+    JOBS[assessment_id] = current
 
 
 @app.get("/api/results/{assessment_id}/{file_name}")
