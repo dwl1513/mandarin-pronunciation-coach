@@ -8,6 +8,7 @@ fast and CI-friendly while still exercising:
 """
 import numpy as np
 
+import src.pipeline as pipeline
 from src.pipeline import assess
 
 
@@ -35,7 +36,9 @@ def test_pipeline_smoke_runs_end_to_end():
 
     assert isinstance(art.report, dict)
     assert "overall" in art.report
+    assert "confidence" in art.report
     assert 0.0 <= art.report["overall"] <= 100.0
+    assert 0.0 <= art.report["confidence"]["overall"] <= 100.0
     # All five dimensions should be populated.
     for dim in ("accuracy", "tone", "fluency", "prosody", "completeness"):
         assert dim in art.report["dims"]
@@ -43,6 +46,8 @@ def test_pipeline_smoke_runs_end_to_end():
     assert len(art.report["per_syllable"]) == 4
     chars = [s["char"] for s in art.report["per_syllable"]]
     assert chars == ["你", "好", "朋", "友"]
+    assert "initial_score" in art.report["per_syllable"][0]
+    assert "final_score" in art.report["per_syllable"][0]
 
 
 def test_pipeline_report_markdown_non_empty():
@@ -53,3 +58,12 @@ def test_pipeline_report_markdown_non_empty():
     assert isinstance(md, str)
     assert "总分" in md
     assert "你" in md and "好" in md
+    assert "声母分" in md
+    assert "韵母分" in md
+    assert "完整度" in md
+    assert "评分可信度" in md
+
+
+def test_parse_tts_engines_supports_multi_reference():
+    parsed = pipeline._parse_tts_engines("mimo-tts,aliyun-tts:Neil")
+    assert parsed == [("mimo-tts", None), ("aliyun-tts", "Neil")]

@@ -1,0 +1,134 @@
+[
+  {
+    "id": "daily-park",
+    "title": "日常朗读",
+    "level": "基础",
+    "focus": "连读、轻声、句尾完整度",
+    "scene": "日常口语",
+    "duration": "00:03",
+    "text": "今天天气真好，我们一起去公园散步吧。",
+    "tags": ["轻声", "连读", "完整度"],
+    "audioPath": "/audio/examples/daily-park.wav"
+  },
+  {
+    "id": "four-tones",
+    "title": "四声对比",
+    "level": "基础",
+    "focus": "一声、二声、三声、四声区分",
+    "scene": "声调专项",
+    "duration": "00:04",
+    "text": "妈妈骑马，马慢妈妈骂马。",
+    "tags": ["四声", "声调", "短句"],
+    "audioPath": "/audio/examples/four-tones.wav"
+  },
+  {
+    "id": "mandarin-standard",
+    "title": "标准普通话",
+    "level": "基础",
+    "focus": "声韵母准确度、普通话常用词",
+    "scene": "课程演示",
+    "duration": "00:05",
+    "text": "老师让我们认真练习普通话声调。",
+    "tags": ["普通话", "声调", "声韵母"],
+    "audioPath": "/audio/examples/mandarin-standard.wav"
+  },
+  {
+    "id": "zh-ch-sh",
+    "title": "平翘舌",
+    "level": "进阶",
+    "focus": "翘舌音和平舌音对比",
+    "scene": "易错音专项",
+    "duration": "00:04",
+    "text": "请清楚地区分翘舌音和平舌音。",
+    "tags": ["zh/ch/sh", "z/c/s", "清晰度"],
+    "audioPath": "/audio/examples/zh-ch-sh.wav"
+  },
+  {
+    "id": "nasal",
+    "title": "前后鼻音",
+    "level": "进阶",
+    "focus": "an、ang、en、eng 的收尾",
+    "scene": "易错韵母",
+    "duration": "00:05",
+    "text": "我想买一斤新鲜苹果和两瓶牛奶。",
+    "tags": ["前鼻音", "后鼻音", "韵母"],
+    "audioPath": "/audio/examples/nasal.wav"
+  },
+  {
+    "id": "meeting",
+    "title": "会议通知",
+    "level": "基础",
+    "focus": "数字、时间、停顿位置",
+    "scene": "校园通知",
+    "duration": "00:04",
+    "text": "今天下午三点，我们在图书馆开会。",
+    "tags": ["数字", "停顿", "校园"],
+    "audioPath": "/audio/examples/meeting.wav"
+  },
+  {
+    "id": "water-cup",
+    "title": "指令短句",
+    "level": "基础",
+    "focus": "爆破音、舌面音、句中停顿",
+    "scene": "口语指令",
+    "duration": "00:04",
+    "text": "请把这杯温水放在桌子右边。",
+    "tags": ["指令", "停顿", "清晰度"],
+    "audioPath": "/audio/examples/water-cup.wav"
+  },
+  {
+    "id": "beijing",
+    "title": "北京欢迎你",
+    "level": "基础",
+    "focus": "地名、人称、自然重音",
+    "scene": "日常表达",
+    "duration": "00:04",
+    "text": "北京欢迎你，我们一起看升旗。",
+    "tags": ["地名", "重音", "连读"],
+    "audioPath": "/audio/examples/beijing.wav"
+  },
+  {
+    "id": "spring",
+    "title": "春天描写",
+    "level": "进阶",
+    "focus": "韵律、语速、轻重音",
+    "scene": "朗读材料",
+    "duration": "00:05",
+    "text": "春天到了，花园里的小树慢慢发芽。",
+    "tags": ["韵律", "语速", "朗读"],
+    "audioPath": "/audio/examples/spring.wav"
+  },
+  {
+    "id": "taxi",
+    "title": "校园出行",
+    "level": "进阶",
+    "focus": "长句完整度、停顿和语速",
+    "scene": "生活场景",
+    "duration": "00:06",
+    "text": "出租车司机已经在学校门口等你十分钟。",
+    "tags": ["长句", "完整度", "流利度"],
+    "audioPath": "/audio/examples/taxi.wav"
+  },
+  {
+    "id": "poem",
+    "title": "古诗朗读",
+    "level": "挑战",
+    "focus": "抑扬顿挫、韵律和节奏",
+    "scene": "朗读材料",
+    "duration": "00:05",
+    "text": "这首古诗读起来抑扬顿挫，很有韵味。",
+    "tags": ["韵律", "节奏", "朗读"],
+    "audioPath": "/audio/examples/poem.wav"
+  },
+  {
+    "id": "peace",
+    "title": "新闻语体",
+    "level": "挑战",
+    "focus": "长句气息、重音和正式语调",
+    "scene": "正式朗读",
+    "duration": "00:06",
+    "text": "中国人民热爱和平，也热爱美好的生活。",
+    "tags": ["正式", "气息", "语调"],
+    "audioPath": "/audio/examples/peace.wav"
+  }
+]

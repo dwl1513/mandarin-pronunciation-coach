@@ -39,6 +39,50 @@ def _internal_pauses(vad_segments: List[Tuple[float, float]]
     return len(real), float(sum(real))
 
 
+def _speech_rate_score(speech_rate: float) -> float:
+    """普通话朗读允许稳一点；2.5~5.0 字/秒都视为自然区间。"""
+    if 2.5 <= speech_rate <= 5.0:
+        return 100.0
+    if speech_rate < 2.5:
+        return float(np.clip(100.0 * (speech_rate / 2.5) ** 1.3, 0.0, 100.0))
+    return float(np.clip(100.0 * np.exp(-((speech_rate - 5.0) / 2.0) ** 2),
+                         0.0, 100.0))
+
+
+def _pause_score(pause_total: float, pause_count: int,
+                 total_duration: float, n_syllables: int) -> tuple[float, float]:
+    """短句允许少量自然停顿；长停顿和高停顿占比才明显扣分。"""
+    pause_ratio = pause_total / max(total_duration, 1e-3)
+    # 短句里一个 0.3~0.5s 的停顿常常是 TTS/示范朗读的自然断句。
+    free_pause = min(0.45, 0.06 * max(n_syllables, 1))
+    adjusted_pause = max(0.0, pause_total - free_pause)
+    adjusted_ratio = adjusted_pause / max(total_duration, 1e-3)
+    ratio_score = float(np.clip(
+        100.0 * (1.0 - adjusted_ratio / MAX_PAUSE_RATIO), 0.0, 100.0,
+    ))
+
+    allowed_pauses = max(1.0, n_syllables / 8.0)
+    extra_pauses = max(0.0, pause_count - allowed_pauses)
+    count_score = float(np.clip(100.0 - 18.0 * extra_pauses, 0.0, 100.0))
+    return pause_ratio, 0.7 * ratio_score + 0.3 * count_score
+
+
+def _rhythm_score(alignment: List) -> float:
+    """用字间时长变异度衡量卡顿；对齐不可用时保持中性偏高。"""
+    durations = np.asarray([
+        max(0.0, float(getattr(s, "end", 0.0)) - float(getattr(s, "start", 0.0)))
+        for s in alignment
+    ], dtype=np.float32)
+    durations = durations[durations > 0.03]
+    if durations.size < 3:
+        return 90.0
+    median = float(np.median(durations))
+    if median <= 1e-3:
+        return 70.0
+    cv = float(np.std(durations) / median)
+    return float(np.clip(100.0 * (1.0 - max(0.0, cv - 0.45) / 0.75), 0.0, 100.0))
+
+
 def score_fluency(vad_segments: List[Tuple[float, float]],
                   alignment: List,
                   total_duration: float) -> FluencyScore:
@@ -50,22 +94,17 @@ def score_fluency(vad_segments: List[Tuple[float, float]],
 
     speech_rate = n_syllables / voiced_duration
     pause_count, pause_total = _internal_pauses(vad_segments)
-    pause_ratio = pause_total / max(total_duration, 1e-3)
-
-    # Speech-rate score: peaks at TARGET_SYLLABLES_PER_SEC, decays both sides.
-    rate_score = 100.0 * np.exp(
-        -((speech_rate - TARGET_SYLLABLES_PER_SEC) ** 2) / (1.5 ** 2)
+    pause_ratio, pause_score = _pause_score(
+        pause_total, pause_count, total_duration, n_syllables,
     )
-    # Pause-ratio score: 100 when ratio==0, 0 when ratio>=MAX_PAUSE_RATIO.
-    pause_score = float(np.clip(
-        100.0 * (1.0 - pause_ratio / MAX_PAUSE_RATIO), 0.0, 100.0,
-    ))
-    # Lots of pauses (>5 in a 60-char passage feels choppy) is its own penalty.
-    norm_pauses = pause_count / max(n_syllables / 8.0, 1.0)
-    pause_count_score = float(np.clip(100.0 - 20.0 * max(0.0, norm_pauses - 1.0),
-                                       0.0, 100.0))
 
-    overall = 0.5 * rate_score + 0.3 * pause_score + 0.2 * pause_count_score
+    rate_score = _speech_rate_score(speech_rate)
+    rhythm_score = _rhythm_score(alignment)
+
+    overall = 0.35 * rate_score + 0.40 * pause_score + 0.25 * rhythm_score
+    if pause_ratio > MAX_PAUSE_RATIO:
+        # 长时间沉默是流利度硬伤，不能被稳定字间节奏抵消。
+        overall *= float(np.clip(1.0 - (pause_ratio - MAX_PAUSE_RATIO), 0.35, 1.0))
     return FluencyScore(
         overall=float(overall),
         speech_rate=float(speech_rate),
@@ -75,7 +114,8 @@ def score_fluency(vad_segments: List[Tuple[float, float]],
         detail={
             "rate_score": float(rate_score),
             "pause_score": float(pause_score),
-            "pause_count_score": float(pause_count_score),
+            "rhythm_score": float(rhythm_score),
             "voiced_duration": float(voiced_duration),
+            "target_syllables_per_sec": float(TARGET_SYLLABLES_PER_SEC),
         },
     )

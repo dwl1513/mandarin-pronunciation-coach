@@ -41,6 +41,8 @@ VAD_FRAME_MS: int = 30              # webrtcvad supports {10, 20, 30}
 WAV2VEC2_MODEL_ID: str = "jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn"
 HF_CACHE_DIR: Path = CACHE_DIR / "hf"
 HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+ALIYUN_ASR_MODEL: str = "qwen3-asr-flash"
+ASR_ENGINE: str = "wav2vec2"  # Options: "wav2vec2", "aliyun-asr", or "auto".
 
 # Device preference: "auto" -> cuda if available, else cpu
 DEVICE: str = "auto"
@@ -73,6 +75,20 @@ TARGET_SYLLABLES_PER_SEC: float = 4.0   # ~native casual speech rate
 MAX_PAUSE_RATIO: float = 0.35           # > this fraction of silence -> 0 fluency
 
 # ---------------------------------------------------------------- TTS engine
-# Options: "edge-tts" (default, free, online) or "f5-tts" (heavy, local).
+# Options: "edge-tts" (default), "aliyun-tts", "mimo-tts", or "f5-tts" (heavy, local).
 TTS_ENGINE: str = "edge-tts"
 EDGE_TTS_VOICE: str = "zh-CN-XiaoxiaoNeural"   # Mandarin female
+ALIYUN_TTS_MODEL: str = "qwen3-tts-instruct-flash"
+ALIYUN_TTS_VOICE: str = "Neil"
+ALIYUN_TTS_LANGUAGE_TYPE: str = "Chinese"
+ALIYUN_TTS_STYLE_PROMPT: str = (
+    "请用普通话水平测试示范朗读的风格合成。要求字音准确，声调清楚，语速中等偏稳，"
+    "语调平实端正，停顿自然，避免俏皮、撒娇、夸张表演和明显情绪化表达。"
+)
+MIMO_TTS_MODEL: str = "mimo-v2.5-tts"
+MIMO_TTS_VOICE: str = "白桦"
+MIMO_TTS_BASE_URL: str = "https://api.xiaomimimo.com/v1"
+MIMO_TTS_STYLE_PROMPT: str = (
+    "请用普通话水平测试示范朗读的风格合成。要求字音准确，声调清楚，语速中等偏稳，"
+    "语调平实端正，停顿自然，避免俏皮、撒娇、夸张表演和明显情绪化表达。"
+)

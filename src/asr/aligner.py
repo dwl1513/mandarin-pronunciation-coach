@@ -38,6 +38,8 @@ class SyllableAlign:
     start: float            # seconds
     end: float              # seconds
     in_vocab: bool = True   # True if the char existed in the ASR vocab
+    lexical_tone: int = 0   # dictionary tone before tone sandhi
+    tone_rule: str = ""     # applied sandhi rule, empty when unchanged
 
     @property
     def duration(self) -> float:
@@ -47,9 +49,25 @@ class SyllableAlign:
         return asdict(self)
 
 
+@dataclass
+class ParsedSyllable:
+    char: str
+    pinyin: str
+    tone: int
+    lexical_tone: int
+    tone_rule: str = ""
+
+
 # ---------------------------------------------------------------- text helpers
-def _parse_reference(text: str) -> List[Tuple[str, str, int]]:
-    """Strip whitespace/punctuation, return [(char, pinyin, tone), ...]."""
+def _parse_reference_detail(text: str) -> List[ParsedSyllable]:
+    """Strip punctuation and return pinyin with common Mandarin tone sandhi.
+
+    `pypinyin` returns dictionary tones.  In real connected Mandarin, common
+    words like "你好"、"不是"、"一个" are read with changed tones.  Using the
+    dictionary tone directly makes the per-character report mark many correct
+    readings as tone errors, so we apply the high-frequency PSC-relevant rules
+    here.
+    """
     keep: List[str] = []
     for ch in text:
         if "一" <= ch <= "鿿":         # CJK unified ideographs
@@ -61,18 +79,80 @@ def _parse_reference(text: str) -> List[Tuple[str, str, int]]:
     with_tone = lazy_pinyin(keep, style=Style.TONE3, neutral_tone_with_five=True)
     plain     = lazy_pinyin(keep, style=Style.NORMAL)
 
-    out: List[Tuple[str, str, int]] = []
+    out: List[ParsedSyllable] = []
     for ch, py_tone, py_plain in zip(keep, with_tone, plain):
         # Extract trailing digit as tone; default to 5 (neutral) if absent.
         tone = 5
         if py_tone and py_tone[-1].isdigit():
             tone = int(py_tone[-1])
-        out.append((ch, py_plain, tone))
+        out.append(ParsedSyllable(ch, py_plain, tone, tone))
+    _apply_tone_sandhi(out)
     return out
 
 
+def _parse_reference(text: str) -> List[Tuple[str, str, int]]:
+    """Compatibility helper used by tests and fallback callers."""
+    return [(s.char, s.pinyin, s.tone) for s in _parse_reference_detail(text)]
+
+
+def _set_sandhi(syl: ParsedSyllable, tone: int, rule: str) -> None:
+    if syl.tone == tone and syl.tone_rule:
+        return
+    syl.tone = tone
+    syl.tone_rule = rule
+
+
+def _apply_tone_sandhi(syllables: List[ParsedSyllable]) -> None:
+    """Apply common tone-sandhi rules used in ordinary Mandarin reading."""
+    n = len(syllables)
+    if n == 0:
+        return
+
+    # 三声连读：连续三声中，除最后一个外通常改读二声。
+    i = 0
+    while i < n:
+        if syllables[i].lexical_tone != 3:
+            i += 1
+            continue
+        j = i
+        while j < n and syllables[j].lexical_tone == 3:
+            j += 1
+        if j - i >= 2:
+            for k in range(i, j - 1):
+                _set_sandhi(syllables[k], 2, "三声连读")
+        i = j
+
+    for i, syl in enumerate(syllables):
+        next_syl = syllables[i + 1] if i + 1 < n else None
+        prev_syl = syllables[i - 1] if i > 0 else None
+
+        if syl.char == "不":
+            if next_syl and next_syl.lexical_tone == 4:
+                _set_sandhi(syl, 2, "不 + 四声")
+            else:
+                _set_sandhi(syl, 4, "不字本调")
+
+        if syl.char == "一":
+            if prev_syl and next_syl and prev_syl.char == next_syl.char:
+                _set_sandhi(syl, 5, "重叠动词中间的一")
+            elif next_syl and next_syl.lexical_tone == 4:
+                _set_sandhi(syl, 2, "一 + 四声")
+            elif next_syl:
+                _set_sandhi(syl, 4, "一 + 非四声")
+            else:
+                _set_sandhi(syl, 1, "一字单读")
+
+
+def _fields(syl) -> Tuple[str, str, int, int, str]:
+    """Accept both ParsedSyllable and legacy 3-tuples in fallback tests."""
+    if isinstance(syl, ParsedSyllable):
+        return syl.char, syl.pinyin, syl.tone, syl.lexical_tone, syl.tone_rule
+    ch, py, tone = syl
+    return ch, py, tone, tone, ""
+
+
 # --------------------------------------------------------------- fallback path
-def _vad_uniform_align(chars: List[Tuple[str, str, int]],
+def _vad_uniform_align(chars: List,
                        vad_segments: List[Tuple[float, float]],
                        total_duration: float) -> List[SyllableAlign]:
     """Distribute characters evenly across all voiced time."""
@@ -97,7 +177,8 @@ def _vad_uniform_align(chars: List[Tuple[str, str, int]],
     seg_idx = 0
     seg_start, seg_end = vad_segments[seg_idx]
     cursor = seg_start
-    for ch, py, tone in chars:
+    for syl in chars:
+        ch, py, tone, lexical_tone, tone_rule = _fields(syl)
         # If current segment runs out, advance to the next voiced block.
         remaining = seg_end - cursor
         if remaining < per_char * 0.5 and seg_idx + 1 < len(vad_segments):
@@ -106,9 +187,11 @@ def _vad_uniform_align(chars: List[Tuple[str, str, int]],
             cursor = seg_start
         start = cursor
         end = min(cursor + per_char, seg_end)
-        aligned.append(SyllableAlign(char=ch, pinyin=py, tone=tone,
-                                      start=float(start), end=float(end),
-                                      in_vocab=False))
+        aligned.append(SyllableAlign(
+            char=ch, pinyin=py, tone=tone,
+            start=float(start), end=float(end), in_vocab=False,
+            lexical_tone=lexical_tone, tone_rule=tone_rule,
+        ))
         cursor = end
     return aligned
 
@@ -169,7 +252,7 @@ def _spans_from_alignment(aligned_ids: list, blank_id: int,
 
 
 def _wav2vec2_align(wav: np.ndarray,
-                    chars: List[Tuple[str, str, int]]
+                    chars: List[ParsedSyllable]
                     ) -> Optional[List[SyllableAlign]]:
     """Try the model-based path. Return None on any failure."""
     try:
@@ -190,7 +273,8 @@ def _wav2vec2_align(wav: np.ndarray,
     # Build target id sequence; abort if too many OOV characters.
     target_ids: List[int] = []
     oov_count = 0
-    for ch, _py, _t in chars:
+    for syl in chars:
+        ch = syl.char
         if ch in vocab:
             target_ids.append(int(vocab[ch]))
         else:
@@ -238,10 +322,13 @@ def _wav2vec2_align(wav: np.ndarray,
     last_end = 0.0
     next_known = sorted(kept_intervals.keys())
     next_ptr = 0
-    for i, (ch, py, tone) in enumerate(chars):
+    for i, syl in enumerate(chars):
         if i in kept_intervals:
             s, e = kept_intervals[i]
-            result.append(SyllableAlign(ch, py, tone, float(s), float(e), True))
+            result.append(SyllableAlign(
+                syl.char, syl.pinyin, syl.tone, float(s), float(e), True,
+                lexical_tone=syl.lexical_tone, tone_rule=syl.tone_rule,
+            ))
             last_end = e
             while next_ptr < len(next_known) and next_known[next_ptr] <= i:
                 next_ptr += 1
@@ -251,11 +338,6 @@ def _wav2vec2_align(wav: np.ndarray,
             if next_anchor_idx is not None:
                 gap_start = last_end
                 gap_end = kept_intervals[next_anchor_idx][0]
-                # how many OOV chars share this gap?
-                oov_in_gap = next_anchor_idx - i + sum(
-                    1 for j in range(i, next_anchor_idx)
-                    if j not in kept_intervals
-                ) - (next_anchor_idx - i - 1)
                 # simpler: count OOV chars between last anchor and next anchor
                 slots = sum(1 for j in range(i, next_anchor_idx)
                             if j not in kept_intervals)
@@ -270,7 +352,10 @@ def _wav2vec2_align(wav: np.ndarray,
                 start = last_end
                 end = last_end + 0.15
                 last_end = end
-            result.append(SyllableAlign(ch, py, tone, float(start), float(end), False))
+            result.append(SyllableAlign(
+                syl.char, syl.pinyin, syl.tone, float(start), float(end), False,
+                lexical_tone=syl.lexical_tone, tone_rule=syl.tone_rule,
+            ))
     return result
 
 
@@ -283,7 +368,7 @@ def align(wav: np.ndarray,
 
     Falls back to a VAD-based uniform partition if the model is unavailable.
     """
-    chars = _parse_reference(reference_text)
+    chars = _parse_reference_detail(reference_text)
     if not chars or wav.size == 0:
         return []
 

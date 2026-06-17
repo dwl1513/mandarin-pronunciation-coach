@@ -4,9 +4,8 @@ We do NOT load wav2vec2 here — the goal is to ensure that a bare-minimum
 alignment is still produced when the model is unavailable, so downstream
 scoring keeps running.
 """
-import numpy as np
 
-from src.asr.aligner import _parse_reference, _vad_uniform_align
+from src.asr.aligner import _parse_reference, _parse_reference_detail, _vad_uniform_align
 
 
 def test_parse_reference_extracts_chinese_only():
@@ -14,12 +13,29 @@ def test_parse_reference_extracts_chinese_only():
     chars = [c for c, _p, _t in parsed]
     assert chars == ["你", "好", "朋", "友"]
     tones = [t for _c, _p, t in parsed]
-    # 你=3, 好=3, 朋=2, 友=3 (pypinyin defaults)
-    assert tones[0] == 3 and tones[1] == 3
+    # "你好" 连续三声，前一个三声按普通话变调读二声。
+    assert tones[0] == 2 and tones[1] == 3
 
 
 def test_parse_reference_empty_for_punctuation_only():
     assert _parse_reference("?.,!") == []
+
+
+def test_parse_reference_applies_third_tone_sandhi():
+    parsed = _parse_reference_detail("你好")
+    assert [(s.char, s.lexical_tone, s.tone, s.tone_rule) for s in parsed] == [
+        ("你", 3, 2, "三声连读"),
+        ("好", 3, 3, ""),
+    ]
+
+
+def test_parse_reference_applies_bu_and_yi_sandhi():
+    parsed = _parse_reference_detail("不是一个看一看")
+    tones = {s.char + str(i): (s.lexical_tone, s.tone, s.tone_rule)
+             for i, s in enumerate(parsed)}
+    assert tones["不0"] == (4, 2, "不 + 四声")
+    assert tones["一2"] == (1, 2, "一 + 四声")
+    assert tones["一5"] == (1, 5, "重叠动词中间的一")
 
 
 def test_vad_uniform_align_covers_all_chars():

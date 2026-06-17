@@ -1,11 +1,11 @@
 """Gradio UI — end-to-end demo.
 
 Run with:
-    python -m src.app.gradio_app
+    uv run python -m src.app.gradio_app
 
 Layout:
     左侧 — 输入：参考文本 + 麦克风 / 文件上传
-    右侧 — 结果：总分 + 维度雷达 + F0 对比图 + 逐字诊断表 + 报告 markdown
+    右侧 — 结果：总分 + 维度得分 + F0 对比图 + 逐字诊断表 + 报告 markdown
                   + "标准发音参考"音频播放器
 """
 from __future__ import annotations
@@ -94,7 +94,7 @@ def build_app() -> gr.Blocks:
             with gr.Column(scale=2):
                 score_md = gr.Markdown(label="得分概览")
                 with gr.Tabs():
-                    with gr.Tab("维度雷达"):
+                    with gr.Tab("维度得分"):
                         plot_bars = gr.Plot()
                     with gr.Tab("F0 对比"):
                         plot_f0 = gr.Plot()

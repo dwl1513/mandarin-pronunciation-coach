@@ -9,6 +9,7 @@ __pycache__/
 .ruff_cache/
 
 # --- env / build ---
+.env
 .venv/
 venv/
 build/

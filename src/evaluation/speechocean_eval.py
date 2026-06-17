@@ -15,10 +15,10 @@ at this scale.  We surface this caveat in the README.
 Usage
 -----
     # 1. Cache the dataset locally (~600 MB)
-    python -m src.evaluation.speechocean_eval --download
+    uv run python -m src.evaluation.speechocean_eval --download
 
     # 2. Run the PCC evaluation on N random samples
-    python -m src.evaluation.speechocean_eval --n 200
+    uv run python -m src.evaluation.speechocean_eval --n 200
 
 The script saves a CSV of (sample_id, human_accuracy, model_score) and prints
 the resulting PCC.
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from config import CACHE_DIR
+from config import CACHE_DIR  # noqa: E402
 
 
 def _load_dataset(split: str = "test"):

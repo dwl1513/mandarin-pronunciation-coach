@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
+import librosa
 import numpy as np
 
 from config import HOP_LENGTH, SAMPLE_RATE
@@ -37,6 +38,16 @@ class SyllableTone:
     correct: bool
     confidence: float       # 0..1 — how strong the winning feature signal was
     score: float            # 0..100
+    pinyin: str = ""
+    lexical_tone: int = 0
+    tone_rule: str = ""
+    start: float = 0.0
+    end: float = 0.0
+    reason: str = ""
+    ref_similarity: float | None = None
+    contour_score: float | None = None
+    slope_score: float | None = None
+    coverage: float | None = None
 
 
 @dataclass
@@ -87,6 +98,86 @@ def _utterance_baseline(f0: np.ndarray, voiced_mask: np.ndarray
     # Use 75–25 inter-quartile range as a robust "speaker spread".
     iqr = float(np.percentile(st, 75) - np.percentile(st, 25))
     return median, max(iqr, 1.0)
+
+
+def _speaker_normalized_st(f0_hz: np.ndarray, baseline_st: float) -> np.ndarray:
+    st = _median_filter(_hz_to_semitone(f0_hz), k=3)
+    return (st - baseline_st).astype(np.float32)
+
+
+def _trim_edges(seq: np.ndarray, ratio: float = 0.12) -> np.ndarray:
+    """Drop a small edge region where alignment often includes consonants."""
+    if seq.size < 8:
+        return seq
+    n = max(1, int(round(seq.size * ratio)))
+    if seq.size - 2 * n < 5:
+        return seq
+    return seq[n:-n]
+
+
+def _resample(seq: np.ndarray, target_len: int = 24) -> np.ndarray:
+    if seq.size == 0:
+        return np.zeros(target_len, dtype=np.float32)
+    if seq.size == 1:
+        return np.full(target_len, seq[0], dtype=np.float32)
+    x = np.linspace(0.0, 1.0, seq.size)
+    y = np.linspace(0.0, 1.0, target_len)
+    return np.interp(y, x, seq).astype(np.float32)
+
+
+def _mean_abs_slope(seq: np.ndarray) -> float:
+    if seq.size < 2:
+        return 0.0
+    return float(seq[-1] - seq[0])
+
+
+def _reference_similarity_score(user_hz: np.ndarray,
+                                ref_hz: np.ndarray,
+                                user_baseline: float,
+                                ref_baseline: float) -> tuple[float, dict]:
+    """Score one syllable by comparing user F0 with reference F0."""
+    min_frames = min(user_hz.size, ref_hz.size)
+    coverage = float(np.clip(min_frames / 8.0, 0.0, 1.0))
+    if user_hz.size < 3 or ref_hz.size < 3:
+        return 0.0, {
+            "contour_score": 0.0,
+            "slope_score": 0.0,
+            "coverage": coverage,
+            "avg_cost": 3.0,
+            "slope_diff": 6.0,
+        }
+
+    u = _trim_edges(_speaker_normalized_st(user_hz, user_baseline))
+    r = _trim_edges(_speaker_normalized_st(ref_hz, ref_baseline))
+    if u.size < 3 or r.size < 3:
+        return 0.0, {
+            "contour_score": 0.0,
+            "slope_score": 0.0,
+            "coverage": coverage,
+            "avg_cost": 3.0,
+            "slope_diff": 6.0,
+        }
+
+    u_curve = _resample(u)
+    r_curve = _resample(r)
+    D, _wp = librosa.sequence.dtw(
+        X=u_curve.reshape(1, -1), Y=r_curve.reshape(1, -1),
+        metric="euclidean",
+    )
+    avg_cost = float(D[-1, -1]) / max(u_curve.size + r_curve.size, 1)
+    contour_score = float(np.clip(100.0 * (1.0 - avg_cost / 2.5), 0.0, 100.0))
+
+    slope_diff = abs(_mean_abs_slope(u_curve) - _mean_abs_slope(r_curve))
+    slope_score = float(np.clip(100.0 * (1.0 - slope_diff / 5.0), 0.0, 100.0))
+
+    score = 0.68 * contour_score + 0.22 * slope_score + 10.0 * coverage
+    return float(np.clip(score, 0.0, 100.0)), {
+        "contour_score": contour_score,
+        "slope_score": slope_score,
+        "coverage": coverage,
+        "avg_cost": avg_cost,
+        "slope_diff": slope_diff,
+    }
 
 
 # ----------------------------------------------------- the feature classifier
@@ -163,35 +254,109 @@ _CLOSE_TONE_PAIRS = {           # commonly-confused pairs → partial credit
 
 
 def score_tone(f0: np.ndarray, voiced_mask: np.ndarray,
-               alignment: List) -> ToneScore:
-    """Per-syllable tone classification + 0..100 scoring."""
+               alignment: List,
+               ref_f0: np.ndarray | None = None,
+               ref_voiced_mask: np.ndarray | None = None,
+               ref_alignment: List | None = None) -> ToneScore:
+    """Per-syllable tone scoring.
+
+    With a reference recording, the score is driven by per-syllable F0 contour
+    similarity.  The tone classifier is still kept as an interpretable label.
+    Without a reference recording, the function falls back to the standalone
+    feature classifier.
+    """
     baseline, spread = _utterance_baseline(f0, voiced_mask)
+    has_reference = (
+        ref_f0 is not None
+        and ref_voiced_mask is not None
+        and ref_alignment is not None
+        and len(ref_alignment) > 0
+    )
+    ref_baseline, _ref_spread = (
+        _utterance_baseline(ref_f0, ref_voiced_mask)
+        if has_reference else (0.0, 1.0)
+    )
 
     per: List[SyllableTone] = []
-    for syl in alignment:
+    for i, syl in enumerate(alignment):
         seg_hz = _slice_voiced_f0_hz(f0, voiced_mask, syl.start, syl.end)
+        ref_seg_hz = np.array([], dtype=np.float32)
+        if has_reference and i < len(ref_alignment):
+            ref_syl = ref_alignment[i]
+            ref_seg_hz = _slice_voiced_f0_hz(
+                ref_f0, ref_voiced_mask, ref_syl.start, ref_syl.end,
+            )
+
         if seg_hz.size < 5:                # too few voiced frames to judge
+            ref_score = None
+            ref_detail = {}
+            if has_reference:
+                ref_score, ref_detail = _reference_similarity_score(
+                    seg_hz, ref_seg_hz, baseline, ref_baseline,
+                )
             per.append(SyllableTone(
                 char=syl.char, expected=syl.tone, detected=0,
-                correct=False, confidence=0.0, score=0.0,
+                correct=bool(has_reference and ref_score and ref_score >= 70.0),
+                confidence=0.0,
+                score=float(ref_score or 0.0),
+                pinyin=getattr(syl, "pinyin", ""),
+                lexical_tone=getattr(syl, "lexical_tone", syl.tone),
+                tone_rule=getattr(syl, "tone_rule", ""),
+                start=float(getattr(syl, "start", 0.0)),
+                end=float(getattr(syl, "end", 0.0)),
+                reason=("F0 帧较少，按参考音相似度给分"
+                        if has_reference and ref_score and ref_score > 0
+                        else "有声 F0 帧太少，声调难判"),
+                ref_similarity=ref_score,
+                contour_score=ref_detail.get("contour_score"),
+                slope_score=ref_detail.get("slope_score"),
+                coverage=ref_detail.get("coverage"),
             ))
             continue
 
         pred, conf, _feats = _classify_by_features(seg_hz, baseline, spread)
         correct = (pred == syl.tone)
 
-        if correct:
+        reason = ""
+        ref_score = None
+        ref_detail = {}
+        if has_reference:
+            ref_score, ref_detail = _reference_similarity_score(
+                seg_hz, ref_seg_hz, baseline, ref_baseline,
+            )
+            score = ref_score
+            if ref_score >= 82:
+                correct = True
+                reason = "F0 轮廓与标准音接近"
+            elif ref_score >= 65:
+                reason = "F0 轮廓与标准音有轻微差异"
+            else:
+                reason = "F0 轮廓与标准音差异较大"
+        elif correct:
             score = 70.0 + 30.0 * conf
         elif (syl.tone, pred) in _CLOSE_TONE_PAIRS:
             score = 45.0          # partial credit for natural confusions
+            reason = "常见易混声调，给部分分"
         elif pred == 0:
             score = 0.0
+            reason = "声调难判"
         else:
             score = 15.0
+            reason = f"期望 {syl.tone} 声，检测为 {pred} 声"
 
         per.append(SyllableTone(
             char=syl.char, expected=syl.tone, detected=pred,
             correct=correct, confidence=conf, score=float(score),
+            pinyin=getattr(syl, "pinyin", ""),
+            lexical_tone=getattr(syl, "lexical_tone", syl.tone),
+            tone_rule=getattr(syl, "tone_rule", ""),
+            start=float(getattr(syl, "start", 0.0)),
+            end=float(getattr(syl, "end", 0.0)),
+            reason=reason,
+            ref_similarity=ref_score,
+            contour_score=ref_detail.get("contour_score"),
+            slope_score=ref_detail.get("slope_score"),
+            coverage=ref_detail.get("coverage"),
         ))
 
     overall = float(np.mean([s.score for s in per])) if per else 0.0
